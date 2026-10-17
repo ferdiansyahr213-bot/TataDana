@@ -174,6 +174,7 @@ function DashboardOverviewContent() {
     const chosenCat = categories.find((c) => c.id === selectedCategoryId);
 
     const payload = {
+      user_id: user?.id || 'usr_demo_123',
       wallet_id: selectedWalletId,
       wallet_name: chosenWallet?.name,
       destination_wallet_id: txType === 'transfer' ? destWalletId : undefined,
@@ -450,6 +451,7 @@ function DashboardOverviewContent() {
 
     try {
       const payload = {
+        user_id: user?.id || 'usr_demo_123',
         wallet_id: targetWallet?.id || selectedWalletId,
         wallet_name: targetWallet?.name,
         category_id: targetCategory?.id || selectedCategoryId,
