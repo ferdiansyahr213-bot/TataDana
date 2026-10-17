@@ -191,6 +191,7 @@ export default function TataAiChatPage() {
 
     try {
       const payload = {
+        user_id: user?.id || 'usr_demo_123',
         wallet_id: targetWallet?.id || 'wal_1',
         wallet_name: targetWallet?.name,
         category_id: targetCategory?.id || 'cat_1',
