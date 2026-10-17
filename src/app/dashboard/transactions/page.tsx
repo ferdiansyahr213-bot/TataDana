@@ -119,7 +119,7 @@ export default function TransactionsPage() {
     const targetUserId = paramId || 'usr_demo_123';
 
     const payload = {
-      user_id: user?.id || 'usr_demo_123',
+      user_id: targetUserId,
       wallet_id: walletId,
       wallet_name: chosenWallet?.name,
       destination_wallet_id: txType === 'transfer' ? destWalletId : undefined,
