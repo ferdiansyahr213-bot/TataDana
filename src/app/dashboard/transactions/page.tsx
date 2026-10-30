@@ -285,7 +285,7 @@ export default function TransactionsPage() {
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
-              className="text-xs rounded-xl border border-surface-border px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-brand-500"
+              className="text-xs rounded-xl border border-surface-border px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-brand-500 w-full sm:w-auto flex-1 sm:flex-none"
             >
               <option value="all">Semua Tipe</option>
               <option value="expense">Pengeluaran</option>
@@ -297,7 +297,7 @@ export default function TransactionsPage() {
             <select
               value={selectedWallet}
               onChange={(e) => setSelectedWallet(e.target.value)}
-              className="text-xs rounded-xl border border-surface-border px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-brand-500"
+              className="text-xs rounded-xl border border-surface-border px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-brand-500 w-full sm:w-auto flex-1 sm:flex-none"
             >
               <option value="all">Semua Dompet</option>
               {wallets.map((w) => (
@@ -311,7 +311,7 @@ export default function TransactionsPage() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="text-xs rounded-xl border border-surface-border px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-brand-500"
+              className="text-xs rounded-xl border border-surface-border px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-brand-500 w-full sm:w-auto flex-1 sm:flex-none"
             >
               <option value="all">Semua Kategori</option>
               {categories.map((c) => (
@@ -333,7 +333,7 @@ export default function TransactionsPage() {
           <span className="text-[11px] text-slate-400">Diurutkan berdasarkan waktu terbaru</span>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 overflow-x-auto">
           {filteredTransactions.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-xs">
               Tidak ada transaksi yang cocok dengan filter
@@ -348,12 +348,12 @@ export default function TransactionsPage() {
               return (
                 <div key={tx.id} className="transition-colors hover:bg-slate-50/60">
                   <div
-                    className="p-4 flex items-center justify-between gap-4 cursor-pointer"
+                    className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 cursor-pointer"
                     onClick={() => hasItems && toggleExpand(tx.id)}
                   >
-                    <div className="flex items-center gap-3.5">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${
                           isExpense
                             ? 'bg-rose-50 text-rose-600'
                             : isTransfer
@@ -370,9 +370,9 @@ export default function TransactionsPage() {
                         )}
                       </div>
 
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <span className="font-bold text-sm text-slate-900 truncate">
                             {tx.notes || (isTransfer ? 'Transfer Dompet' : tx.category_name)}
                           </span>
                           {hasItems && (
@@ -381,18 +381,18 @@ export default function TransactionsPage() {
                             </Badge>
                           )}
                           {tx.source === 'telegram_photo' && (
-                            <span className="p-1 rounded-md bg-purple-100 text-purple-700 text-[10px] flex items-center gap-1 font-medium">
+                            <span className="p-1 rounded-md bg-purple-100 text-purple-700 text-[10px] flex items-center gap-1 font-medium shrink-0">
                               <Camera className="w-3 h-3" /> Foto Struk AI
                             </span>
                           )}
                           {tx.source === 'telegram_voice' && (
-                            <span className="p-1 rounded-md bg-sky-100 text-sky-700 text-[10px] flex items-center gap-1 font-medium">
+                            <span className="p-1 rounded-md bg-sky-100 text-sky-700 text-[10px] flex items-center gap-1 font-medium shrink-0">
                               <Mic className="w-3 h-3" /> Voice Note
                             </span>
                           )}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs text-slate-500 mt-1">
                           <span>{formatShortWIB(tx.transaction_date)}</span>
                           <span>•</span>
                           <span className="font-medium text-slate-700">
@@ -412,8 +412,8 @@ export default function TransactionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 pl-12 sm:pl-0">
+                      <div className="text-left sm:text-right">
                         <span
                           className={`font-black text-sm sm:text-base ${
                             isExpense
@@ -427,7 +427,7 @@ export default function TransactionsPage() {
                           {formatRupiah(tx.amount)}
                         </span>
                         {tx.merchant_name && (
-                          <p className="text-[10px] text-slate-400 mt-0.5">{tx.merchant_name}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 truncate">{tx.merchant_name}</p>
                         )}
                       </div>
 
@@ -448,7 +448,7 @@ export default function TransactionsPage() {
 
                   {/* Expanded Items Breakdown */}
                   {hasItems && isExpanded && (
-                    <div className="px-6 py-4 bg-slate-50/90 border-t border-slate-100 space-y-2">
+                    <div className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-50/90 border-t border-slate-100 space-y-2">
                       <div className="flex items-center justify-between text-xs font-bold text-slate-600 mb-2">
                         <span>Rincian Item Struk Belanja ({tx.merchant_name || 'Merchant'}):</span>
                         <span>Total: {formatRupiah(tx.amount)}</span>

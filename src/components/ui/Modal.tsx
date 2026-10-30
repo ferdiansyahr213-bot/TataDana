@@ -44,13 +44,13 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
       <div
-        className={`w-full ${widthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all animate-scaleUp`}
+        className={`w-full ${widthClasses[maxWidth]} max-h-[92vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden mx-auto sm:mx-4 my-auto transform transition-all animate-scaleUp`}
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 shrink-0">
           <div>
             <h3 className="text-base font-bold text-slate-900">{title}</h3>
             {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
@@ -63,7 +63,7 @@ export const Modal: React.FC<ModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 overscroll-contain">{children}</div>
       </div>
     </div>
   );

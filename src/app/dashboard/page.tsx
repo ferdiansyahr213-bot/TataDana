@@ -861,12 +861,12 @@ function DashboardOverviewContent() {
                 return (
                   <div
                     key={tx.id}
-                    className="py-3 flex items-center justify-between gap-3 text-xs hover:bg-slate-50/90 px-2 rounded-xl transition-colors"
+                    className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 text-xs hover:bg-slate-50/90 px-2 rounded-xl transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
                       {/* Icon */}
                       <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs mt-0.5 sm:mt-0 ${
                           isExpense
                             ? 'bg-rose-50 text-rose-600 border border-rose-100'
                             : isTransfer
@@ -884,8 +884,8 @@ function DashboardOverviewContent() {
                       </div>
 
                       {/* Detail */}
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 font-bold text-slate-800 truncate">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 font-bold text-slate-800">
                           <span className="truncate">{tx.notes || (isTransfer ? 'Transfer Dompet' : tx.category_name)}</span>
 
                           {/* Source Badges */}
@@ -906,7 +906,7 @@ function DashboardOverviewContent() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] text-slate-400 mt-0.5">
                           <span>{formatShortWIB(tx.transaction_date)}</span>
                           <span>•</span>
                           <span className="font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded-md">
@@ -925,7 +925,8 @@ function DashboardOverviewContent() {
                     </div>
 
                     {/* Nominal */}
-                    <div className="text-right shrink-0">
+                    <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t sm:border-t-0 border-slate-100 pt-1.5 sm:pt-0 pl-12 sm:pl-0">
+                      <span className="text-[10px] text-slate-400 sm:hidden">Nominal:</span>
                       <span
                         className={`font-black text-sm ${
                           isExpense ? 'text-rose-600' : isTransfer ? 'text-blue-600' : 'text-emerald-600'

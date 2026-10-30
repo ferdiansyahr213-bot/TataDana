@@ -19,7 +19,9 @@ import {
   Users,
   ExternalLink,
   Zap,
-  Smartphone
+  Smartphone,
+  Menu,
+  X
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { supabase } from '@/lib/supabase/client';
@@ -29,6 +31,7 @@ import { sanitizeUserDisplayName, sanitizeUserId } from '@/lib/auth/user-sanitiz
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = React.useState<boolean>(false);
+  const [isMobileOpen, setIsMobileOpen] = React.useState<boolean>(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = React.useState<boolean>(false);
   const [userProfile, setUserProfile] = React.useState<{
     id?: string;
@@ -45,6 +48,35 @@ export const Sidebar: React.FC = () => {
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
     plan: 'starter',
   });
+
+  // Close mobile drawer on route change
+  React.useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  // Listen for open-mobile-sidebar custom events from Header or action triggers
+  React.useEffect(() => {
+    const handleOpen = () => setIsMobileOpen(true);
+    const handleClose = () => setIsMobileOpen(false);
+    window.addEventListener('open-mobile-sidebar', handleOpen);
+    window.addEventListener('close-mobile-sidebar', handleClose);
+    return () => {
+      window.removeEventListener('open-mobile-sidebar', handleOpen);
+      window.removeEventListener('close-mobile-sidebar', handleClose);
+    };
+  }, []);
+
+  // Lock body scroll when mobile drawer is open
+  React.useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -150,27 +182,11 @@ export const Sidebar: React.FC = () => {
     { label: 'Bot Simulator', href: '/dashboard/simulator', icon: Smartphone, badge: 'ADMIN' },
   ];
 
-  return (
-    <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col h-screen sticky top-0 shrink-0 select-none z-30 shadow-xs">
-      {/* Brand Header */}
-      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-        <Link href="/dashboard" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-brand-sm transition-transform group-hover:scale-105">
-            T
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-slate-900 tracking-tight text-lg">TataDana</span>
-              <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium">Fintech Personal Assistant</p>
-          </div>
-        </Link>
-      </div>
-
+  const renderNavContent = (onItemClick?: () => void) => (
+    <>
       {/* Nav List */}
       <nav className="flex-1 p-3.5 space-y-1 overflow-y-auto">
-        {/* Kelompok Menu Utama / Fitur Pengguna (Bisa Diakses Semua User) */}
+        {/* Kelompok Menu Utama / Fitur Pengguna */}
         <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           Fitur & Menu Utama
         </div>
@@ -182,6 +198,7 @@ export const Sidebar: React.FC = () => {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onItemClick}
               className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
                 isActive
                   ? 'bg-blue-50 text-brand-600 font-bold shadow-xs border border-blue-200/60'
@@ -200,7 +217,7 @@ export const Sidebar: React.FC = () => {
           );
         })}
 
-        {/* Kelompok PANEL ADMIN - Terproteksi Hak Akses (Hanya Tampil Jika Role Admin / Superadmin) */}
+        {/* Kelompok PANEL ADMIN - Terproteksi Hak Akses */}
         {isAdmin && (
           <div className="pt-4 mt-3 border-t border-slate-200/80 space-y-1">
             <div className="px-3 py-1.5 flex items-center justify-between">
@@ -222,6 +239,7 @@ export const Sidebar: React.FC = () => {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={onItemClick}
                   className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
                     isActive
                       ? 'bg-purple-50 text-purple-700 font-bold shadow-xs border border-purple-200/80'
@@ -243,7 +261,7 @@ export const Sidebar: React.FC = () => {
         )}
       </nav>
 
-      {/* Plan Card Upgrade Prompt - Clean Minimalist Card */}
+      {/* Plan Card Upgrade Prompt */}
       <div className="p-3.5 border-t border-slate-100 bg-white">
         {userProfile.plan === 'pro' ? (
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50/80 border border-blue-200/80 rounded-2xl p-3 mb-2.5 space-y-2">
@@ -258,7 +276,10 @@ export const Sidebar: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => setIsUpgradeModalOpen(true)}
+              onClick={() => {
+                if (onItemClick) onItemClick();
+                setIsUpgradeModalOpen(true);
+              }}
               className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition-all shadow-2xs"
             >
               <span>Lihat Benefit Pro</span>
@@ -275,7 +296,10 @@ export const Sidebar: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setIsUpgradeModalOpen(true)}
+              onClick={() => {
+                if (onItemClick) onItemClick();
+                setIsUpgradeModalOpen(true);
+              }}
               className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-semibold transition-all shadow-xs"
               title="Upgrade ke Pro via WhatsApp Admin"
             >
@@ -307,6 +331,7 @@ export const Sidebar: React.FC = () => {
           <Link
             href="/login"
             onClick={() => {
+              if (onItemClick) onItemClick();
               if (typeof window !== 'undefined') {
                 sessionStorage.clear();
               }
@@ -318,6 +343,81 @@ export const Sidebar: React.FC = () => {
           </Link>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar (Tampil di layar tablet/desktop md ke atas) */}
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200/80 h-screen sticky top-0 shrink-0 select-none z-30 shadow-xs">
+        {/* Brand Header */}
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-brand-sm transition-transform group-hover:scale-105">
+              T
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 tracking-tight text-lg">TataDana</span>
+                <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium">Fintech Personal Assistant</p>
+            </div>
+          </Link>
+        </div>
+
+        {renderNavContent()}
+      </aside>
+
+      {/* Mobile Drawer Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 md:hidden transition-opacity duration-300"
+          onClick={() => setIsMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Mobile Drawer (Collapsible drawer geser samping di layar HP) */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-white shadow-2xl flex flex-col md:hidden transform transition-transform duration-300 ease-in-out ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu Navigasi Mobile TataDana"
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <Link
+            href="/dashboard"
+            onClick={() => setIsMobileOpen(false)}
+            className="flex items-center gap-2.5 group"
+          >
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow-brand-sm">
+              T
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 tracking-tight text-base">TataDana</span>
+                <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium">Fintech Personal Assistant</p>
+            </div>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(false)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Tutup menu navigasi"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {renderNavContent(() => setIsMobileOpen(false))}
+      </aside>
 
       <UpgradeProModal
         isOpen={isUpgradeModalOpen}
@@ -329,6 +429,6 @@ export const Sidebar: React.FC = () => {
           phone: userProfile.phone,
         }}
       />
-    </aside>
+    </>
   );
 };

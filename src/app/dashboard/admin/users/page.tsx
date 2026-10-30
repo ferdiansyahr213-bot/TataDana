@@ -258,7 +258,7 @@ export default function AdminUsersManagementPage() {
             </div>
           ) : filteredUsers.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[750px] text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
                   <tr>
                     <th className="p-4">Pengguna</th>

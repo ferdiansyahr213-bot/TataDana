@@ -23,6 +23,7 @@ import {
   Target,
   Smartphone,
   ExternalLink,
+  Menu,
   Info,
   ShieldAlert
 } from 'lucide-react';
@@ -262,7 +263,20 @@ export default function BotSimulatorPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-brand-sm">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('open-mobile-sidebar'));
+                }
+              }}
+              className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200 shadow-2xs shrink-0"
+              aria-label="Buka menu navigasi"
+              title="Buka menu samping"
+            >
+              <Menu className="w-5 h-5 text-slate-700" />
+            </button>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-brand-sm shrink-0">
               <Bot className="w-6 h-6" />
             </div>
             <div>

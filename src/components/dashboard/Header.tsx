@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { formatWIBDateTime } from '@/lib/utils/date-wib';
-import { PlusCircle, Bell, Sparkles, Camera, CheckCircle2 } from 'lucide-react';
+import { PlusCircle, Bell, Sparkles, Camera, CheckCircle2, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { UpgradeProModal } from './UpgradeProModal';
 
@@ -62,15 +62,34 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-white border-b border-slate-200/80 px-8 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sticky top-0 z-20">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{title}</h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          {subtitle || `Waktu sekarang: ${currentWib}`}
-        </p>
+    <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 sticky top-0 z-20">
+      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+        <div className="flex items-center gap-2.5">
+          {/* Hamburger Menu Button (Layar Mobile) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('open-mobile-sidebar'));
+              }
+            }}
+            className="md:hidden p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200 shadow-2xs"
+            aria-label="Buka menu navigasi"
+            title="Buka menu samping"
+          >
+            <Menu className="w-5 h-5 text-slate-700" />
+          </button>
+
+          <div>
+            <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-tight">{title}</h1>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              {subtitle || `Waktu sekarang: ${currentWib}`}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
         {toastMsg && (
           <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 animate-fadeIn">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />

@@ -1,9 +1,16 @@
 import './globals.css';
 import React from 'react';
+import type { Metadata, Viewport } from 'next';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'TataDana — Catat Keuangan Semudah Chat Langsung dari Telegram',
   description: 'Aplikasi manajemen keuangan pribadi terintegrasi Telegram Bot dan AI OCR struk belanja.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({
@@ -14,6 +21,7 @@ export default function RootLayout({
   return (
     <html lang="id">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

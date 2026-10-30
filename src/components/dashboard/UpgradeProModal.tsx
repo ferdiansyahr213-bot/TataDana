@@ -131,7 +131,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
       onClose={onClose}
       title="Upgrade ke TataDana Pro"
       description="Nikmati pencatatan keuangan tanpa batas dan fitur asisten AI pintar"
-      maxWidth="lg"
+      maxWidth="md"
     >
       <div className="space-y-5 p-1">
         {/* Banner Harga & Badge */}
