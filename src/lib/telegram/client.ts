@@ -123,6 +123,7 @@ export async function sendTelegramMessage(
   }
 
   try {
+    console.log(`[Telegram API] 📤 Mengirim balasan ke chat_id ${chatId}...`);
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -132,9 +133,39 @@ export async function sendTelegramMessage(
         parse_mode: parseMode,
       }),
     });
-    return await res.json();
+    const result = await res.json();
+
+    // Fallback: Jika Telegram gagal parse markdown (error 400 Bad Request), kirim ulang sebagai plain text
+    if (!result.ok && parseMode && (result.error_code === 400 || /can't parse|entities|markdown/i.test(result.description || ''))) {
+      console.warn(`[Telegram API] ⚠️ Gagal mengirim dengan parseMode ${parseMode} (${result.description}). Mencoba kirim ulang sebagai teks biasa...`);
+      const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: text,
+        }),
+      });
+      const retryResult = await retryRes.json();
+      if (retryResult.ok) {
+        console.log(`[Telegram API] ✅ Berhasil terkirim via fallback teks biasa ke chat_id ${chatId}`);
+      } else {
+        console.error(`[Telegram API] ❌ Gagal kirim pesan ke chat_id ${chatId}:`, retryResult.description);
+      }
+      return retryResult;
+    }
+
+    if (result.ok) {
+      console.log(`[Telegram API] ✅ Pesan berhasil terkirim ke chat_id ${chatId} (message_id: ${result.result?.message_id})`);
+    } else if (result.error_code === 401) {
+      console.warn(`[Telegram API] ⚠️ Telegram Bot Token tidak valid / 401 Unauthorized (${result.description}). Pesan balasan tetap tersimpan di Simulator & Transaksi Store.`);
+    } else {
+      console.error(`[Telegram API] ❌ Telegram API error (${result.error_code || 'unknown'}):`, result.description);
+    }
+
+    return result;
   } catch (error) {
-    console.error('Error sending Telegram message:', error);
+    console.error('[Telegram API] ❌ Network error sending Telegram message:', error);
     return { ok: false, error };
   }
 }

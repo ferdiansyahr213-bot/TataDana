@@ -4,6 +4,16 @@ export type WalletType = 'cash' | 'bank' | 'ewallet';
 export type TransactionType = 'expense' | 'income' | 'transfer';
 export type TransactionSource = 'web' | 'telegram_text' | 'telegram_photo' | 'telegram_voice';
 
+export interface UserApproval {
+  id: string;
+  full_name: string;
+  email: string;
+  phone_number: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface UserProfile {
   id: string;
   email?: string;
@@ -24,6 +34,8 @@ export interface UserProfile {
   reminder_time_1: string; // HH:mm:ss
   reminder_time_2: string; // HH:mm:ss
   onboarding_completed: boolean;
+  verification_status?: 'verified' | 'pending';
+  password?: string;
   created_at: string;
   updated_at: string;
 }
@@ -160,19 +172,7 @@ export interface ExportRecord {
   created_at: string;
 }
 
-export interface ParsedTransactionResult {
-  jenis: 'pemasukan' | 'pengeluaran' | 'transfer';
-  nominal: number;
-  kategori: string;
-  catatan: string;
-  merchant?: string;
-  sourceWalletName?: string;
-  destWalletName?: string;
-  items?: Array<{ name: string; price: number; quantity: number; category?: string }>;
-  purchasePayload?: InitiatePaymentPayload;
-}
-
-export type PaymentOption = 'TATADANA_WALLET' | 'QRIS' | 'BANK_TRANSFER' | 'CASH';
+export type PaymentOption = string;
 
 export interface InitiatePaymentData {
   item: string;
@@ -185,6 +185,37 @@ export interface InitiatePaymentData {
 export interface InitiatePaymentPayload {
   action: 'INITIATE_PAYMENT';
   data: InitiatePaymentData;
+}
+
+export interface RecordIncomeData {
+  title: string;
+  amount: number;
+  category: string;
+  suggested_wallet_id?: string;
+  suggested_wallet_name?: string;
+  type: 'income';
+  payment_options?: PaymentOption[];
+}
+
+export interface RecordIncomePayload {
+  action: 'RECORD_INCOME';
+  data: RecordIncomeData;
+}
+
+export type TataAiActionPayload = InitiatePaymentPayload | RecordIncomePayload;
+
+export interface ParsedTransactionResult {
+  jenis: 'pemasukan' | 'pengeluaran' | 'transfer';
+  nominal: number;
+  kategori: string;
+  catatan: string;
+  merchant?: string;
+  sourceWalletName?: string;
+  destWalletName?: string;
+  items?: Array<{ name: string; price: number; quantity: number; category?: string }>;
+  purchasePayload?: InitiatePaymentPayload;
+  incomePayload?: RecordIncomePayload;
+  actionPayload?: TataAiActionPayload;
 }
 
 

@@ -25,10 +25,10 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
 
   if (isAuthorized === null) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-slate-400 text-xs">
-        <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin mb-3" />
-        <p className="font-semibold text-slate-300">Memverifikasi Otorisasi Role Admin...</p>
-        <p className="text-[11px] text-slate-500 mt-1">Sistem RBAC TataDana sedang memeriksa hak akses akun Anda</p>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-slate-500 text-xs">
+        <div className="w-8 h-8 rounded-full border-2 border-purple-600 border-t-transparent animate-spin mb-3" />
+        <p className="font-semibold text-slate-700">Memverifikasi Otorisasi Role Admin...</p>
+        <p className="text-[11px] text-slate-400 mt-1">Sistem RBAC TataDana sedang memeriksa hak akses akun Anda</p>
       </div>
     );
   }

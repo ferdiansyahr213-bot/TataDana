@@ -17,12 +17,14 @@ import {
   FileSpreadsheet, 
   FileText, 
   Zap, 
-  Check 
+  Check,
+  MessageCircle 
 } from 'lucide-react';
 import { TelegramChatMock } from '@/components/telegram-preview/TelegramChatMock';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
+import { getAdminRegisterWaUrl, getAdminWaDisplayNumber } from '@/lib/utils/whatsapp';
 
 export default function LandingPage() {
   const [pricingCycle, setPricingCycle] = useState<'monthly' | 'lifetime'>('lifetime');
@@ -132,6 +134,16 @@ export default function LandingPage() {
             <span>Mulai Gratis Sekarang</span>
             <ArrowRight className="w-5 h-5" />
           </Link>
+          <a
+            href={getAdminRegisterWaUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-2xl font-bold text-base shadow-md shadow-emerald-600/20 transition-all transform active:scale-95"
+            title="Daftar / Konsultasi langsung via WhatsApp Admin"
+          >
+            <MessageCircle className="w-5 h-5 fill-current" />
+            <span>Daftar via WhatsApp</span>
+          </a>
           <a
             href="#demo"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl font-semibold text-base border border-slate-200 transition-all"
@@ -616,6 +628,15 @@ export default function LandingPage() {
             >
               Daftar Gratis Sekarang
             </Link>
+            <a
+              href={getAdminRegisterWaUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 text-base inline-flex items-center justify-center gap-2"
+            >
+              <MessageCircle className="w-5 h-5 fill-current" />
+              <span>Daftar via WhatsApp Admin</span>
+            </a>
             <Link
               href="/login"
               className="px-8 py-4 bg-brand-700/60 hover:bg-brand-700 text-white font-bold rounded-2xl border border-white/20 transition-all text-base"
@@ -662,7 +683,7 @@ export default function LandingPage() {
               <li><Link href="/" className="hover:text-white transition-colors">Tentang TataDana</Link></li>
               <li><Link href="/" className="hover:text-white transition-colors">Karir & Rekrutmen</Link></li>
               <li><Link href="/" className="hover:text-white transition-colors">Press Kit Fintech</Link></li>
-              <li><Link href="/admin" className="hover:text-white transition-colors">Portal Admin Internal</Link></li>
+              <li><Link href="/dashboard/admin" className="hover:text-white transition-colors">Portal Admin Internal</Link></li>
             </ul>
           </div>
 
@@ -673,6 +694,17 @@ export default function LandingPage() {
               <li><Link href="/privacy" className="hover:text-white transition-colors">Kebijakan Privasi</Link></li>
               <li><Link href="/terms" className="hover:text-white transition-colors">Syarat & Ketentuan</Link></li>
               <li><a href="mailto:support@tatadana.id" className="hover:text-white transition-colors">Kontak: support@tatadana.id</a></li>
+              <li>
+                <a
+                  href={getAdminRegisterWaUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-semibold transition-colors"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                  <span>WhatsApp Admin: {getAdminWaDisplayNumber()}</span>
+                </a>
+              </li>
               <li><span className="text-slate-500 block">WIB (Asia/Jakarta) Support Hours</span></li>
             </ul>
           </div>

@@ -59,3 +59,48 @@
 .animate-scaleUp {
   animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Chat Markdown Styling */
+.chat-markdown {
+  word-break: break-word;
+}
+
+.chat-markdown strong,
+.chat-markdown b {
+  font-weight: 700;
+}
+
+.chat-markdown em,
+.chat-markdown i {
+  font-style: italic;
+}
+
+.chat-markdown p {
+  margin-bottom: 0.5rem;
+}
+
+.chat-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin-bottom: 0.5rem;
+  padding-left: 1rem;
+}
+
+.chat-markdown ul {
+  list-style-type: disc;
+}
+
+.chat-markdown ol {
+  list-style-type: decimal;
+}
+
+.chat-markdown li {
+  margin-bottom: 0.25rem;
+}
+
+.chat-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

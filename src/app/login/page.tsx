@@ -5,66 +5,99 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Sparkles, ArrowRight, Smartphone, Mail, Lock } from 'lucide-react';
+import { Mail, Lock, LogIn, AlertCircle, MessageCircle } from 'lucide-react';
+import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
+import { getAdminRegisterWaUrl } from '@/lib/utils/whatsapp';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleQuickAdmin = () => {
-    setEmail('ferdiansyahr213@gmail.com');
-    setPassword('Vina2007');
-    setLoginMethod('email');
-    setErrorMessage(null);
-  };
+  // State to hold user info when account is pending admin approval
+  const [pendingApprovalUser, setPendingApprovalUser] = useState<{
+    id: string;
+    fullName?: string;
+    email: string;
+    phone?: string;
+  } | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Dynamic WhatsApp registration URL populated with email if entered
+  const waRegisterUrl = getAdminRegisterWaUrl({
+    email: email.trim() || undefined,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage(null);
+    setPendingApprovalUser(null);
 
-    if (loginMethod === 'phone') {
-      // Direct to OTP verification
-      sessionStorage.setItem('pending_phone', phoneNumber);
-      router.push(`/verify-otp?phone=${encodeURIComponent(phoneNumber)}`);
-      return;
-    }
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'check_or_login_user',
+          payload: { email: email.trim(), password },
+        }),
+      });
 
-    // Check Admin Login per specification
-    const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail === 'ferdiansyahr213@gmail.com') {
-      if (password !== 'Vina2007') {
+      const data = await res.json();
+
+      // Check if user is pending admin approval
+      if (data.status === 'pending' || (data.user && data.user.verification_status === 'pending' && data.user.role !== 'admin' && data.user.role !== 'superadmin')) {
         setIsLoading(false);
-        setErrorMessage('Password salah untuk akun Admin. Gunakan password yang benar (Vina2007).');
+        setPendingApprovalUser({
+          id: data.user?.id || '',
+          fullName: data.user?.full_name,
+          email: data.user?.email || email,
+          phone: data.user?.phone_number,
+        });
         return;
       }
-      setTimeout(() => {
-        setIsLoading(false);
-        sessionStorage.setItem('current_user_id', 'usr_admin_999');
-        sessionStorage.setItem('user_role', 'superadmin');
-        sessionStorage.setItem('user_email', 'ferdiansyahr213@gmail.com');
-        sessionStorage.setItem('user_name', 'Vina Al Fitriansyah');
-        sessionStorage.setItem('user_phone', '087757524542');
-        router.push('/admin');
-      }, 500);
-      return;
-    }
 
-    // Regular User email login
-    setTimeout(() => {
+      if (!data.ok) {
+        setIsLoading(false);
+        setErrorMessage(data.error || 'Email atau kata sandi salah');
+        return;
+      }
+
+      const user = data.user;
+
+      // Double-check verification status before storing session or redirecting
+      if (user.verification_status === 'pending' && user.role !== 'admin' && user.role !== 'superadmin') {
+        setIsLoading(false);
+        setPendingApprovalUser({
+          id: user.id,
+          fullName: user.full_name,
+          email: user.email,
+          phone: user.phone_number,
+        });
+        return;
+      }
+
+      // Login berhasil untuk akun terverifikasi / admin
+      sessionStorage.setItem('current_user_id', user.id);
+      sessionStorage.setItem('user_role', user.role || 'user');
+      sessionStorage.setItem('user_email', user.email);
+      sessionStorage.setItem('user_name', user.full_name || 'Pengguna TataDana');
+      sessionStorage.setItem('user_phone', user.phone_number || '');
+      sessionStorage.setItem('user_verification_status', user.verification_status || 'verified');
+      if (user.avatar_url) sessionStorage.setItem('user_avatar', user.avatar_url);
+
       setIsLoading(false);
-      sessionStorage.setItem('current_user_id', 'usr_demo_123');
-      sessionStorage.setItem('user_role', 'user');
-      sessionStorage.setItem('user_email', email || 'ferdiansyahr213@gmail.com');
-      sessionStorage.setItem('user_name', 'Vina Al Fitriansyah');
-      sessionStorage.setItem('user_phone', '087757524542');
-      router.push('/dashboard');
-    }, 700);
+      if (user.role === 'superadmin' || user.role === 'admin') {
+        router.push('/dashboard/admin');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
+    }
   };
 
   return (
@@ -109,100 +142,46 @@ export default function LoginPage() {
               Selamat Datang Kembali
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Masuk ke akun TataDana untuk mengakses dashboard keuanganmu
+              Masuk dengan akun terverifikasi untuk mengakses dashboard keuangan
             </p>
-          </div>
-
-          {/* Login Method Toggle */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => setLoginMethod('email')}
-              className={`py-2.5 rounded-lg transition-all ${
-                loginMethod === 'email' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Email &amp; Password
-            </button>
-            <button
-              type="button"
-              onClick={() => setLoginMethod('phone')}
-              className={`py-2.5 rounded-lg transition-all ${
-                loginMethod === 'phone' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Nomor HP (OTP)
-            </button>
           </div>
 
           {/* Error Message */}
           {errorMessage && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
-              {errorMessage}
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* Quick Admin Helper Card */}
-          <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 flex items-center justify-between text-xs">
-            <div>
-              <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider text-brand-600">
-                Akses Superadmin
-              </span>
-              <p className="text-slate-600 font-mono text-[11px] mt-0.5">
-                ferdiansyahr213@gmail.com
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleQuickAdmin}
-              className="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-xs transition-all"
-            >
-              Isi Otomatis
-            </button>
-          </div>
-
-          {/* Form */}
+          {/* Form Login Murni Email & Password */}
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-            {loginMethod === 'email' ? (
-              <>
-                <Input
-                  label="Alamat Email"
-                  type="email"
-                  placeholder="nama@email.com"
-                  leftIcon={<Mail className="w-4 h-4" />}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-                <Input
-                  label="Kata Sandi"
-                  type="password"
-                  placeholder="••••••••"
-                  leftIcon={<Lock className="w-4 h-4" />}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </>
-            ) : (
-              <Input
-                label="Nomor Handphone (WhatsApp / SMS)"
-                type="tel"
-                placeholder="081234567890"
-                leftIcon={<Smartphone className="w-4 h-4" />}
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                required
-                helperText="Kode OTP verifikasi akan dikirimkan ke nomor ini (Bypass dev kode: 123456)."
-              />
-            )}
+            <Input
+              label="Alamat Email"
+              type="email"
+              placeholder="nama@email.com"
+              leftIcon={<Mail className="w-4 h-4" />}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <Input
+              label="Kata Sandi"
+              type="password"
+              placeholder="••••••••"
+              leftIcon={<Lock className="w-4 h-4" />}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
             <Button type="submit" variant="primary" className="w-full mt-2" isLoading={isLoading}>
-              {loginMethod === 'phone' ? 'Kirim Kode OTP' : 'Masuk ke Dashboard'}
+              <LogIn className="w-4 h-4 mr-1.5" />
+              <span>Masuk ke Dashboard</span>
             </Button>
           </form>
 
-          {/* Google OAuth Simulation Button */}
+          {/* Quick Demo Login Option */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200" />
@@ -220,6 +199,7 @@ export default function LoginPage() {
               sessionStorage.setItem('user_email', 'ferdiansyahr213@gmail.com');
               sessionStorage.setItem('user_name', 'Vina Al Fitriansyah');
               sessionStorage.setItem('user_phone', '087757524542');
+              sessionStorage.setItem('user_verification_status', 'verified');
               router.push('/dashboard');
             }}
             className="w-full py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
@@ -242,7 +222,7 @@ export default function LoginPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>Masuk dengan Google</span>
+            <span>Masuk dengan Google (Akun Demo)</span>
           </button>
 
           <p className="text-center text-xs text-slate-500">
@@ -251,8 +231,35 @@ export default function LoginPage() {
               Daftar sekarang gratis
             </Link>
           </p>
+
+          <div className="pt-1">
+            <a
+              href={waRegisterUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 px-4 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs"
+              title="Hubungi Admin untuk pendaftaran & aktivasi akun TataDana"
+            >
+              <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600" />
+              <span>Daftar / Bantuan via WhatsApp Admin</span>
+            </a>
+          </div>
         </div>
       </div>
+
+      {/* Modal Menunggu Persetujuan Admin jika Akun Berstatus Pending */}
+      {pendingApprovalUser && (
+        <PendingVerificationModal
+          fullName={pendingApprovalUser.fullName}
+          email={pendingApprovalUser.email}
+          phone={pendingApprovalUser.phone}
+          userId={pendingApprovalUser.id}
+          onClose={() => setPendingApprovalUser(null)}
+          onVerified={() => {
+            router.push('/dashboard');
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -41,7 +41,7 @@ if (!BOT_TOKEN) {
 const DEMO_TOKEN = 'demo_bot_token_tatadana';
 if (!BOT_TOKEN || BOT_TOKEN === DEMO_TOKEN) {
   // Jika pengguna ingin menempelkan token langsung di file ini:
-  const HARDCODED_TOKEN = '8935805678:AAHmVJbPMMCer9Lg1HTakdp3C_7hhbviEDM';
+  const HARDCODED_TOKEN = '8795289115:AAGPjN73UpjnmbCS5TR6z2PCLlaIQZKB3dY';
   if (HARDCODED_TOKEN) {
     BOT_TOKEN = HARDCODED_TOKEN;
   }

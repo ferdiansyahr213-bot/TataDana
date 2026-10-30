@@ -1,4 +1,13 @@
-import { ParsedTransactionResult, AILog, InitiatePaymentPayload, InitiatePaymentData } from '../types';
+import {
+  ParsedTransactionResult,
+  AILog,
+  InitiatePaymentPayload,
+  InitiatePaymentData,
+  RecordIncomePayload,
+  RecordIncomeData,
+  TataAiActionPayload,
+  Wallet,
+} from '../types';
 import { parseIndonesianCurrency } from '../utils/currency';
 import { serverStore } from '../supabase/server';
 
@@ -14,7 +23,7 @@ interface AIExecutionOptions {
  * Intelligent Indonesian Text Parsing Fallback
  * Used when external AI API keys are not supplied or as instant local pre-parser
  */
-export function heuristicParseIndonesian(text: string): ParsedTransactionResult | null {
+export function heuristicParseIndonesian(text: string, userWallets?: Wallet[]): ParsedTransactionResult | null {
   const clean = text.trim();
   const lower = clean.toLowerCase();
 
@@ -126,6 +135,7 @@ export function heuristicParseIndonesian(text: string): ParsedTransactionResult 
     else if (kategori === 'Kesehatan') catEnglish = 'Health';
     else if (kategori === 'Pendidikan') catEnglish = 'Education';
 
+    const dynamicOptions = getDynamicPaymentOptions(userWallets);
     purchasePayload = {
       action: 'INITIATE_PAYMENT',
       data: {
@@ -133,7 +143,24 @@ export function heuristicParseIndonesian(text: string): ParsedTransactionResult 
         amount: nominal,
         currency: 'IDR',
         category: catEnglish,
-        payment_options: ['TATADANA_WALLET', 'QRIS', 'BANK_TRANSFER', 'CASH'],
+        payment_options: dynamicOptions,
+      },
+    };
+  }
+
+  let incomePayload: RecordIncomePayload | undefined;
+  if (jenis === 'pemasukan' && nominal > 0) {
+    const suggested = userWallets?.find((w) => w.is_default) || userWallets?.[0];
+    incomePayload = {
+      action: 'RECORD_INCOME',
+      data: {
+        title: notes || 'Pemasukan',
+        amount: nominal,
+        category: kategori || 'Gaji / Pendapatan',
+        suggested_wallet_id: suggested?.id,
+        suggested_wallet_name: suggested?.name,
+        type: 'income',
+        payment_options: getDynamicPaymentOptions(userWallets),
       },
     };
   }
@@ -145,6 +172,8 @@ export function heuristicParseIndonesian(text: string): ParsedTransactionResult 
     catatan: notes,
     destWalletName,
     purchasePayload,
+    incomePayload,
+    actionPayload: purchasePayload || incomePayload,
   };
 }
 
@@ -158,14 +187,34 @@ export interface PurchaseIntentResult {
 }
 
 /**
+ * Mendapatkan daftar opsi pembayaran dinamis berdasarkan dompet riil pengguna.
+ * Menghilangkan opsi hardcoded seperti 'TATADANA_WALLET' atau 'QRIS' yang tidak dimiliki user.
+ */
+export function getDynamicPaymentOptions(wallets?: Wallet[]): string[] {
+  if (!wallets || wallets.length === 0) {
+    return ['Dompet Utama', 'Tunai / Catat Manual'];
+  }
+  const options = wallets.map((w) => w.name);
+  const hasCash = wallets.some(
+    (w) => w.type === 'cash' || /tunai|cash|kas/i.test(w.name)
+  );
+  if (!hasCash) {
+    options.push('Tunai / Catat Manual');
+  }
+  return options;
+}
+
+/**
  * Format response and structured action payload for payment initiation
  */
 export function formatInitiatePaymentReply(
   itemName: string,
   amount: number,
-  categoryName: string
+  categoryName: string,
+  userWallets?: Wallet[]
 ): { replyText: string; payload: InitiatePaymentPayload } {
   const formattedAmount = new Intl.NumberFormat('id-ID').format(amount);
+  const options = getDynamicPaymentOptions(userWallets);
   const payload: InitiatePaymentPayload = {
     action: 'INITIATE_PAYMENT',
     data: {
@@ -173,17 +222,97 @@ export function formatInitiatePaymentReply(
       amount: amount,
       currency: 'IDR',
       category: categoryName,
-      payment_options: ['TATADANA_WALLET', 'QRIS', 'BANK_TRANSFER', 'CASH'],
+      payment_options: options,
     },
   };
+
+  const optionsList = options
+    .map((opt, i) => {
+      const matched = userWallets?.find(
+        (w) => w.name.toLowerCase() === opt.toLowerCase() || w.id === opt
+      );
+      const balanceInfo = matched
+        ? ` (Saldo: Rp ${new Intl.NumberFormat('id-ID').format(matched.balance)})`
+        : '';
+      return `${i + 1}. ${opt}${balanceInfo}`;
+    })
+    .join('\n');
 
   const replyText = `Siap, pesanan **${itemName}** sebesar **Rp ${formattedAmount}** sudah dicatat. Mau bayar pakai apa?
 
 Pilihan metode:
-1. Saldo TataDana
-2. QRIS
-3. Transfer Bank
-4. Tunai / Catat Manual
+${optionsList}
+
+\`\`\`json
+${JSON.stringify(payload, null, 2)}
+\`\`\``;
+
+  return { replyText, payload };
+}
+
+export interface IncomeIntentResult {
+  title: string;
+  amount: number;
+  category: string;
+  suggested_wallet_id?: string;
+  replyText: string;
+  payload: RecordIncomePayload;
+}
+
+export interface TransactionIntentResult {
+  type: 'expense' | 'income';
+  replyText: string;
+  payload: TataAiActionPayload;
+  purchaseIntent?: PurchaseIntentResult;
+  incomeIntent?: IncomeIntentResult;
+}
+
+/**
+ * Format response and structured action payload for income recording
+ */
+export function formatRecordIncomeReply(
+  title: string,
+  amount: number,
+  categoryName: string,
+  userWallets?: Wallet[],
+  suggestedWalletId?: string
+): { replyText: string; payload: RecordIncomePayload } {
+  const formattedAmount = new Intl.NumberFormat('id-ID').format(amount);
+  const options = getDynamicPaymentOptions(userWallets);
+  const matchedSuggested =
+    userWallets?.find((w) => w.id === suggestedWalletId) ||
+    userWallets?.find((w) => w.is_default) ||
+    userWallets?.[0];
+
+  const payload: RecordIncomePayload = {
+    action: 'RECORD_INCOME',
+    data: {
+      title,
+      amount,
+      category: categoryName,
+      suggested_wallet_id: matchedSuggested?.id || suggestedWalletId,
+      suggested_wallet_name: matchedSuggested?.name,
+      type: 'income',
+      payment_options: options,
+    },
+  };
+
+  const walletList = options
+    .map((opt, i) => {
+      const matched = userWallets?.find(
+        (w) => w.name.toLowerCase() === opt.toLowerCase() || w.id === opt
+      );
+      const balanceInfo = matched
+        ? ` (Saldo: Rp ${new Intl.NumberFormat('id-ID').format(matched.balance)})`
+        : '';
+      return `${i + 1}. ${opt}${balanceInfo}`;
+    })
+    .join('\n');
+
+  const replyText = `Alhamdulillah! Pemasukan **${title}** sebesar **Rp ${formattedAmount}** siap dicatat. 💰
+
+Silakan pilih dompet tujuan penerimaan:
+${walletList}
 
 \`\`\`json
 ${JSON.stringify(payload, null, 2)}
@@ -193,9 +322,151 @@ ${JSON.stringify(payload, null, 2)}
 }
 
 /**
+ * System Prompt Builder untuk model AI TataDana (Gemini / OpenAI / DeepSeek)
+ * Menginjeksi daftar dompet riil pengguna beserta saldo ke dalam context AI,
+ * dan mengklasifikasikan transaksi pengguna menjadi dua jenis: expense vs income.
+ */
+export function buildTataAiSystemPrompt(wallets?: Wallet[]): string {
+  const walletListStr =
+    wallets && wallets.length > 0
+      ? wallets
+          .map((w) => `${w.name} [ID: ${w.id}] (Saldo: Rp ${new Intl.NumberFormat('id-ID').format(w.balance)})`)
+          .join(', ')
+      : 'Dompet Utama [ID: wal_default] (Saldo: Rp 0)';
+
+  const availableOptions = getDynamicPaymentOptions(wallets);
+  const formattedOptionsList = JSON.stringify(availableOptions);
+  const defaultWalletId = wallets?.[0]?.id || 'wal_1';
+
+  return `Kamu adalah Tata AI, asisten dan penasihat keuangan pribadi cerdas untuk aplikasi TataDana.
+Tugas utamamu adalah membantu pengguna mengelola keuangan, mengevaluasi anggaran belanja, menganalisis arus kas, serta memfasilitasi pencatatan transaksi secara instan dan ramah.
+
+KONTEKS DOMPET PENGGUNA YANG TERSEDIA:
+Daftar dompet pengguna yang tersedia: [${walletListStr}]
+
+KLASIFIKASI DUA TIPE TRANSAKSI (income vs expense):
+1. PENGELUARAN (expense):
+   - Untuk pembelian, belanja, jajan, bayar tagihan, dsb (contoh: "kopi 15k", "cilok 2rb", "bayar listrik 150rb").
+   - Format blok JSON di akhir pesan wajib ber-action "INITIATE_PAYMENT":
+\`\`\`json
+{
+  "action": "INITIATE_PAYMENT",
+  "data": {
+    "item": "<nama_barang>",
+    "amount": <nominal_angka_integer>,
+    "currency": "IDR",
+    "category": "<kategori_pengeluaran>",
+    "payment_options": ${formattedOptionsList}
+  }
+}
+\`\`\`
+
+2. PEMASUKAN (income):
+   - Untuk kata kunci seperti gajian, gaji, bonus, dapat uang, terima transfer, cashback, uang masuk, hasil jualan, komisi, freelance, dividen, dll (contoh: "gajian 5jt", "bonus 2jt", "terima transfer 500rb", "cashback 25rb").
+   - Format blok JSON di akhir pesan wajib ber-action "RECORD_INCOME":
+\`\`\`json
+{
+  "action": "RECORD_INCOME",
+  "data": {
+    "title": "<nama_atau_sumber_pemasukan>",
+    "amount": <nominal_angka_integer>,
+    "category": "Gaji / Pendapatan",
+    "suggested_wallet_id": "${defaultWalletId}",
+    "type": "income"
+  }
+}
+\`\`\`
+
+PANDUAN KETAT OUTPUT:
+1. Berikan penjelasan dalam Bahasa Indonesia yang ramah, santun, dan mudah dipahami dengan format Markdown (gunakan **tebal** untuk nominal uang atau poin utama).
+2. JANGAN PERNAH menyatukan struktur JSON ke dalam kalimat penjelasan untuk pengguna. Jika memerlukan aksi (pembayaran atau pemasukan), SELALU letakkan blok JSON di baris paling akhir pesan dengan pembungkus triple backtick \`\`\`json ... \`\`\` yang valid tanpa teks tambahan di bawahnya.
+3. ATURAN KETAT OPSI PEMBAYARAN:
+   - Pada properti "payment_options" di blok JSON pengeluaran, HANYA masukkan dompet yang benar-benar dimiliki pengguna (${formattedOptionsList}), ditambah opsi umum "Tunai / Catat Manual" jika relevan.
+   - JANGAN PERNAH menampilkan opsi default/hardcode (seperti QRIS atau TATADANA_WALLET) jika pengguna tidak memiliki dompet tersebut!
+4. Pada properti "suggested_wallet_id" di blok JSON pemasukan, gunakan ID dompet riil dari daftar dompet pengguna di atas.
+5. Jika pesan pengguna bersifat konsultasi keuangan biasa tanpa nominal transaksi (misal: "cek saldo", "apakah keuanganku boros?", "tips hemat uang makan", "simulasi beli motor"), jawab secara informatif dan edukatif TANPA menyertakan blok JSON apa pun.`;
+}
+
+export const TATA_AI_SYSTEM_PROMPT = buildTataAiSystemPrompt();
+
+/**
+ * Ekstraksi & Pembersihan Payload Aksi AI dari Teks Chat:
+ * Memisahkan dan menyembunyikan blok kode JSON dari teks percakapan,
+ * sehingga teks mentah JSON TIDAK PERNAH tampil kepada pengguna,
+ * melainkan diekstrak menjadi objek aksi untuk dirender sebagai Kartu Aksi Interaktif (Pengeluaran maupun Pemasukan).
+ */
+export function extractActionPayloadFromMessage(rawText: string): {
+  cleanText: string;
+  payload?: TataAiActionPayload;
+} {
+  if (!rawText) return { cleanText: '' };
+
+  let text = rawText;
+  let extractedPayload: TataAiActionPayload | undefined;
+
+  // 1. Ekstrak dari blok markdown ```json ... ``` atau ``` ... ```
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?\{[\s\S]*?"action"\s*:\s*"(?:INITIATE_PAYMENT|RECORD_INCOME)"[\s\S]*?\})\s*```/gi;
+  text = text.replace(codeBlockRegex, (_, jsonContent) => {
+    try {
+      extractedPayload = JSON.parse(jsonContent.trim());
+    } catch (e) {
+      // fallback
+    }
+    return '';
+  });
+
+  // 2. Ekstrak jika ada raw JSON tanpa fence
+  if (!extractedPayload) {
+    const rawJsonRegex = /(\{[\s\S]*?"action"\s*:\s*"(?:INITIATE_PAYMENT|RECORD_INCOME)"[\s\S]*?\})/gi;
+    text = text.replace(rawJsonRegex, (rawJson) => {
+      try {
+        extractedPayload = JSON.parse(rawJson.trim());
+      } catch (e) {
+        // fallback
+      }
+      return '';
+    });
+  }
+
+  // 3. Fallback: tangkap code block apa pun yang berisi json valid ber-action INITIATE_PAYMENT / RECORD_INCOME
+  if (!extractedPayload) {
+    const anyCodeBlockRegex = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/gi;
+    text = text.replace(anyCodeBlockRegex, (fullMatch, jsonContent) => {
+      try {
+        const parsed = JSON.parse(jsonContent.trim());
+        if (parsed && (parsed.action === 'INITIATE_PAYMENT' || parsed.action === 'RECORD_INCOME')) {
+          extractedPayload = parsed;
+          return '';
+        }
+      } catch (e) {}
+      return fullMatch;
+    });
+  }
+
+  // 4. Jika payload berhasil diekstrak, bersihkan teks daftar metode/dompet manual
+  // karena opsi dompet akan otomatis dirender sebagai tombol kartu interaktif
+  if (extractedPayload) {
+    text = text
+      .replace(/\n*Pilihan metode:\s*\n*(?:[1-9]\d*\.[^\n]*\n*)+/gi, '')
+      .replace(/\n*Pilihan metode:\s*$/gi, '')
+      .replace(/\n*Metode pembayaran:\s*\n*(?:[1-9]\d*\.[^\n]*\n*)+/gi, '')
+      .replace(/\n*Silakan pilih dompet tujuan penerimaan:\s*\n*(?:[1-9]\d*\.[^\n]*\n*)+/gi, '')
+      .replace(/\n*Silakan pilih dompet tujuan penerimaan:\s*$/gi, '');
+  }
+
+  // 5. Bersihkan sisa spasi & baris baru berlebih di akhir
+  const cleanText = text.trim();
+
+  return {
+    cleanText,
+    payload: extractedPayload,
+  };
+}
+
+/**
  * Detect purchase/expense intent from short natural language inputs (e.g. "cilok 2rb", "kopi susu 15k", "pulsa 50rb")
  */
-export function parsePurchaseIntent(text: string): PurchaseIntentResult | null {
+export function parsePurchaseIntent(text: string, userWallets?: Wallet[]): PurchaseIntentResult | null {
   if (!text) return null;
   const raw = text.trim();
   const clean = raw.replace(/^\/(?:tataai|ai|catat|order|beli)\s*/i, '').trim();
@@ -335,7 +606,7 @@ export function parsePurchaseIntent(text: string): PurchaseIntentResult | null {
     tatadanaCategoryName = 'Makanan & Minuman';
   }
 
-  const { replyText, payload } = formatInitiatePaymentReply(itemName, nominal, category);
+  const { replyText, payload } = formatInitiatePaymentReply(itemName, nominal, category, userWallets);
 
   return {
     item_name: itemName,
@@ -345,6 +616,172 @@ export function parsePurchaseIntent(text: string): PurchaseIntentResult | null {
     replyText,
     payload,
   };
+}
+
+/**
+ * Detect income intent from short natural language inputs (e.g. "gajian 5jt", "bonus 2jt", "terima transfer 500k", "cashback 25rb")
+ */
+export function parseIncomeIntent(text: string, userWallets?: Wallet[]): IncomeIntentResult | null {
+  if (!text) return null;
+  const raw = text.trim();
+  const clean = raw.replace(/^\/(?:tataai|ai|catat|income|masuk)\s*/i, '').trim();
+  const lower = clean.toLowerCase();
+
+  // Exclude pure commands, greetings, reports
+  if (
+    /^(?:\/start|\/help|\/bantuan|\/saldo|\/budget|\/kalender|\/calendar|\/hari_ini|\/minggu_ini|\/bulan_ini|\/sheet)\b/i.test(
+      raw
+    ) ||
+    /^(?:halo|hai|hi|hello|pagi|siang|sore|malam|bantuan|help|menu|start)\b/i.test(lower)
+  ) {
+    return null;
+  }
+
+  // Exclude transfer between user's own wallets (e.g. "transfer bca ke gopay")
+  const isTransfer = /\b(?:transfer|tf|kirim(?:\s+uang)?)\b/i.test(lower) && /\b(?:ke|menuju)\b/i.test(lower);
+  if (isTransfer) return null;
+
+  // Check if text indicates income keywords
+  const incomeRegex = /\b(?:gaji|gajian|bonus|dapat\s+uang|terima(?:\s+transfer|\s+uang|\s+dana)?|transfer\s+masuk|uang\s+masuk|penghasilan|cair|freelance|dividen|cashback|hasil\s+jualan|komisi|thr|amplop|upah)\b/i;
+  if (!incomeRegex.test(lower)) {
+    return null;
+  }
+
+  // 1. Extract amount with priority
+  let matchedAmountText: string | null = null;
+  const unitRegex = /(?:rp\.?\s*)?(\d+(?:[.,]\d+)?\s*(?:rb|ribu|k|jt|juta|mio|milyar|miliar))\b/i;
+  const rpRegex = /(?:rp\.?\s*)(\d{1,3}(?:[.,]\d{3})+|\d+)/i;
+  const thousandsRegex = /\b(\d{1,3}(?:\.\d{3})+)\b/;
+  const fourDigitRegex = /\b(\d{4,9})\b/;
+  const standaloneDigitRegex = /\b(\d{3,9})\b/;
+
+  const m1 = lower.match(unitRegex);
+  if (m1) {
+    matchedAmountText = m1[0];
+  } else {
+    const m2 = lower.match(rpRegex);
+    if (m2) {
+      matchedAmountText = m2[0];
+    } else {
+      const m3 = lower.match(thousandsRegex);
+      if (m3) {
+        matchedAmountText = m3[0];
+      } else {
+        const m4 = lower.match(fourDigitRegex);
+        if (m4) {
+          matchedAmountText = m4[0];
+        } else {
+          const m5 = lower.match(standaloneDigitRegex);
+          if (m5) {
+            matchedAmountText = m5[0];
+          }
+        }
+      }
+    }
+  }
+
+  if (!matchedAmountText) return null;
+
+  const nominal = parseIndonesianCurrency(matchedAmountText);
+  if (!nominal || nominal <= 0) return null;
+
+  // 2. Extract title / source of income
+  const amountPattern = new RegExp(matchedAmountText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  let title = clean.replace(amountPattern, '').trim();
+
+  // Strip prefixes & noise
+  title = title
+    .replace(/^(?:catat|catatkan|tambah|input|tolong|ada)?\s+/i, '')
+    .replace(/^(?:pemasukan|uang masuk|masuk)\s+/i, '')
+    .replace(/^(?:sebesar|sejumlah|nominal|rp\.?)\s+/i, '')
+    .replace(/(?:sebesar|sejumlah|nominal|rp\.?)$/i, '')
+    .replace(/[.,:;!?]+$/, '')
+    .trim();
+
+  if (!title) {
+    if (/gaji|gajian/i.test(lower)) title = 'Gaji Bulanan';
+    else if (/bonus/i.test(lower)) title = 'Bonus';
+    else if (/freelance/i.test(lower)) title = 'Honor Freelance';
+    else if (/cashback/i.test(lower)) title = 'Cashback';
+    else if (/dividen|investasi/i.test(lower)) title = 'Dividen Investasi';
+    else if (/terima\s+transfer|transfer\s+masuk/i.test(lower)) title = 'Terima Transferan';
+    else title = 'Pemasukan';
+  }
+
+  // 3. Determine Category
+  let category = 'Gaji / Pendapatan';
+  if (/bonus|freelance|proyek|project|komisi|side\s*job|sidehustle/i.test(lower)) {
+    category = 'Bonus & Freelance';
+  } else if (/investasi|dividen|profit|crypto|saham|reksadana/i.test(lower)) {
+    category = 'Investasi & Dividen';
+  } else if (/cashback|promo|hadiah|giveaway|undian/i.test(lower)) {
+    category = 'Cashback & Hadiah';
+  } else if (/penjualan|jualan|dagang|toko|omset|omzet/i.test(lower)) {
+    category = 'Hasil Usaha / Jualan';
+  } else if (/gaji|gajian|upah|honor/i.test(lower)) {
+    category = 'Gaji / Pendapatan';
+  } else {
+    category = 'Pemasukan Lainnya';
+  }
+
+  // 4. Determine suggested wallet
+  let suggestedWallet: Wallet | undefined;
+  if (userWallets && userWallets.length > 0) {
+    suggestedWallet = userWallets.find((w) => lower.includes(w.name.toLowerCase()));
+    if (!suggestedWallet) {
+      suggestedWallet = userWallets.find((w) => w.is_default) || userWallets[0];
+    }
+  }
+
+  const { replyText, payload } = formatRecordIncomeReply(
+    title,
+    nominal,
+    category,
+    userWallets,
+    suggestedWallet?.id
+  );
+
+  return {
+    title,
+    amount: nominal,
+    category,
+    suggested_wallet_id: suggestedWallet?.id,
+    replyText,
+    payload,
+  };
+}
+
+/**
+ * Unified Transaction Intent Parser
+ * Supports both Income ("gajian 5jt") and Expense ("kopi 15k")
+ */
+export function parseTransactionIntent(
+  text: string,
+  userWallets?: Wallet[]
+): TransactionIntentResult | null {
+  // First check income
+  const inc = parseIncomeIntent(text, userWallets);
+  if (inc) {
+    return {
+      type: 'income',
+      replyText: inc.replyText,
+      payload: inc.payload,
+      incomeIntent: inc,
+    };
+  }
+
+  // Then check purchase
+  const pur = parsePurchaseIntent(text, userWallets);
+  if (pur) {
+    return {
+      type: 'expense',
+      replyText: pur.replyText,
+      payload: pur.payload,
+      purchaseIntent: pur,
+    };
+  }
+
+  return null;
 }
 
 /**

@@ -7,18 +7,21 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
-import { Check, Sparkles, ShieldCheck, Zap, UploadCloud } from 'lucide-react';
+import { Check, Sparkles, ShieldCheck, Zap, UploadCloud, MessageCircle } from 'lucide-react';
 import { PLAN_LIMITS } from '@/lib/utils/plans';
+import { UpgradeProModal } from '@/components/dashboard/UpgradeProModal';
 
 export default function PricingUpgradePage() {
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'pro'>('pro');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isUpgradeWaModalOpen, setIsUpgradeWaModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'midtrans' | 'manual_transfer'>('midtrans');
   const [manualReceiptUrl, setManualReceiptUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>('usr_demo_123');
   const [currentUserPlan, setCurrentUserPlan] = useState<string>('starter');
+  const [userData, setUserData] = useState<any>(null);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -31,6 +34,7 @@ export default function PricingUpgradePage() {
         .then(data => {
           if (data.ok && data.user) {
             setCurrentUserPlan(data.user.plan);
+            setUserData(data.user);
           }
         })
         .catch(console.error);
@@ -191,19 +195,30 @@ export default function PricingUpgradePage() {
             </ul>
           </div>
 
-          <Button
-            onClick={() => {
-              if (currentUserPlan !== 'pro') {
-                setSelectedPlan('pro');
-                setIsPaymentModalOpen(true);
-              }
-            }}
-            variant="primary"
-            className="w-full shadow-brand"
-            disabled={currentUserPlan === 'pro'}
-          >
-            {currentUserPlan === 'pro' ? '✅ Paket Pro Aktif' : 'Upgrade ke Pro Sekarang (Rp99.000)'}
-          </Button>
+          <div className="space-y-2">
+            <Button
+              onClick={() => {
+                if (currentUserPlan !== 'pro') {
+                  setSelectedPlan('pro');
+                  setIsPaymentModalOpen(true);
+                }
+              }}
+              variant="primary"
+              className="w-full shadow-brand"
+              disabled={currentUserPlan === 'pro'}
+            >
+              {currentUserPlan === 'pro' ? '✅ Paket Pro Aktif' : 'Upgrade ke Pro Sekarang (Rp99.000)'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setIsUpgradeWaModalOpen(true)}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Aktivasi via WhatsApp Admin (Rp49rb/bln)</span>
+            </button>
+          </div>
         </Card>
       </div>
 
@@ -303,6 +318,13 @@ export default function PricingUpgradePage() {
           </div>
         </div>
       </Modal>
+
+      {/* WhatsApp Pro Upgrade Modal */}
+      <UpgradeProModal
+        isOpen={isUpgradeWaModalOpen}
+        onClose={() => setIsUpgradeWaModalOpen(false)}
+        user={userData}
+      />
     </div>
   );
 }

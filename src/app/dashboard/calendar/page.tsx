@@ -5,6 +5,8 @@ import { Header } from '@/components/dashboard/Header';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
 import { formatRupiah } from '@/lib/utils/currency';
 import { formatShortWIB, formatWIBDateTime } from '@/lib/utils/date-wib';
 import { 
@@ -13,22 +15,39 @@ import {
   ChevronRight, 
   ArrowUpRight, 
   ArrowDownRight, 
-  Wallet, 
+  Wallet as WalletIcon, 
   Clock, 
   PlusCircle, 
   CheckCircle2,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  FileText,
+  Tag,
+  Sparkles
 } from 'lucide-react';
-import { Transaction, UserProfile } from '@/lib/types';
+import { Transaction, UserProfile, Wallet as WalletType, Category } from '@/lib/types';
+import { insertTransaction, fetchUserWallets, fetchUserCategories } from '@/lib/supabase/data-service';
 import Link from 'next/link';
 
 export default function FinancialCalendarPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [wallets, setWallets] = useState<WalletType[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedDateStr, setSelectedDateStr] = useState<string>(''); // YYYY-MM-DD
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth()); // 0-indexed
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Note Form Modal State
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [noteDate, setNoteDate] = useState('');
+  const [noteType, setNoteType] = useState<'expense' | 'income'>('expense');
+  const [noteAmount, setNoteAmount] = useState('');
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteWalletId, setNoteWalletId] = useState('');
+  const [noteCategoryId, setNoteCategoryId] = useState('');
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+  const [noteFeedback, setNoteFeedback] = useState<string | null>(null);
 
   // Set today as default selected date on client mount
   useEffect(() => {
@@ -36,15 +55,32 @@ export default function FinancialCalendarPage() {
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const d = String(today.getDate()).padStart(2, '0');
-    setSelectedDateStr(`${y}-${m}-${d}`);
+    const dateFormatted = `${y}-${m}-${d}`;
+    setSelectedDateStr(dateFormatted);
+    setNoteDate(dateFormatted);
   }, []);
 
   const loadData = async () => {
     try {
-      const res = await fetch('/api/data?userId=usr_demo_123');
-      const data = await res.json();
+      const activeUserId = (typeof window !== 'undefined' ? sessionStorage.getItem('current_user_id') : null) || 'usr_demo_123';
+      const [dataRes, walletsData, categoriesData] = await Promise.all([
+        fetch(`/api/data?userId=${encodeURIComponent(activeUserId)}`),
+        fetchUserWallets(activeUserId),
+        fetchUserCategories(activeUserId),
+      ]);
+
+      const data = await dataRes.json();
       if (data.ok) {
         setTransactions(data.transactions || []);
+      }
+      setWallets(walletsData);
+      setCategories(categoriesData);
+
+      if (walletsData.length > 0 && !noteWalletId) {
+        setNoteWalletId(walletsData[0].id);
+      }
+      if (categoriesData.length > 0 && !noteCategoryId) {
+        setNoteCategoryId(categoriesData[0].id);
       }
     } catch (e) {
       console.error(e);
@@ -56,6 +92,62 @@ export default function FinancialCalendarPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleOpenNoteModal = (dateStr?: string) => {
+    const targetDate = dateStr || selectedDateStr || (() => {
+      const today = new Date();
+      return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    })();
+    setNoteDate(targetDate);
+    setSelectedDateStr(targetDate);
+    setNoteAmount('');
+    setNoteTitle('');
+    setNoteFeedback(null);
+    setIsNoteModalOpen(true);
+  };
+
+  const handleSaveNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const num = parseFloat(noteAmount);
+    if (isNaN(num) || num <= 0) return;
+
+    setIsSubmittingNote(true);
+    setNoteFeedback(null);
+
+    const activeUserId = (typeof window !== 'undefined' ? sessionStorage.getItem('current_user_id') : null) || 'usr_demo_123';
+    const chosenWallet = wallets.find((w) => w.id === noteWalletId) || wallets[0];
+    const chosenCat = categories.find((c) => c.id === noteCategoryId) || categories[0];
+
+    const isoDate = new Date(`${noteDate}T12:00:00Z`).toISOString();
+
+    const payload = {
+      user_id: activeUserId,
+      wallet_id: chosenWallet?.id || 'wal_demo_1',
+      wallet_name: chosenWallet?.name || 'Dompet Utama',
+      category_id: chosenCat?.id,
+      category_name: chosenCat?.name || (noteType === 'expense' ? 'Pengeluaran Lainnya' : 'Pemasukan Lainnya'),
+      category_emoji: chosenCat?.emoji || (noteType === 'expense' ? '💸' : '💰'),
+      type: noteType,
+      amount: num,
+      notes: noteTitle.trim() || `Catatan tanggal ${noteDate}`,
+      source: 'web' as const,
+      transaction_date: isoDate,
+    };
+
+    try {
+      await insertTransaction(activeUserId, payload);
+      setNoteFeedback('✅ Catatan transaksi berhasil disimpan ke kalender!');
+      await loadData();
+      setTimeout(() => {
+        setIsNoteModalOpen(false);
+        setIsSubmittingNote(false);
+        setNoteFeedback(null);
+      }, 1000);
+    } catch (err: any) {
+      setIsSubmittingNote(false);
+      setNoteFeedback('Gagal menyimpan: ' + (err.message || 'Error'));
+    }
+  };
 
   const monthNames = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -285,12 +377,15 @@ export default function FinancialCalendarPage() {
                 {selectedDateStr || 'Pilih Tanggal'}
               </h3>
             </div>
-            <Link href="/dashboard/transactions">
-              <Button variant="outline" size="sm" className="gap-1 text-xs">
-                <PlusCircle className="w-3.5 h-3.5 text-brand-500" />
-                <span>Tambah</span>
-              </Button>
-            </Link>
+            <Button
+              onClick={() => handleOpenNoteModal(selectedDateStr)}
+              variant="primary"
+              size="sm"
+              className="gap-1 text-xs shadow-xs"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Catat Transaksi</span>
+            </Button>
           </div>
 
           {/* Daily Totals */}
@@ -320,6 +415,15 @@ export default function FinancialCalendarPage() {
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   Belum ada catatan mutasi keuangan pada tanggal ini.
                 </p>
+                <Button
+                  onClick={() => handleOpenNoteModal(selectedDateStr)}
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 text-xs gap-1.5"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 text-brand-500" />
+                  <span>Catat Catatan / Transaksi Pertama</span>
+                </Button>
               </div>
             ) : (
               selectedDayTransactions.map((tx) => (
@@ -354,6 +458,161 @@ export default function FinancialCalendarPage() {
           </div>
         </Card>
       </div>
+
+      {/* Note Form Modal per specification */}
+      <Modal
+        isOpen={isNoteModalOpen}
+        onClose={() => setIsNoteModalOpen(false)}
+        title="Catat Transaksi & Catatan Keuangan"
+        description="Form pencatatan keuangan yang terintegrasi otomatis dengan kalender"
+      >
+        <form onSubmit={handleSaveNote} className="space-y-4 text-xs p-1">
+          {/* Tanggal ter-set otomatis */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Tanggal Transaksi (Otomatis Terisi Sesuai Pilihan Kalender)
+            </label>
+            <input
+              type="date"
+              value={noteDate}
+              onChange={(e) => setNoteDate(e.target.value)}
+              required
+              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-brand-500 font-medium"
+            />
+          </div>
+
+          {/* Type Toggle */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Jenis Transaksi
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setNoteType('expense')}
+                className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                  noteType === 'expense'
+                    ? 'bg-brand-500 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Pengeluaran
+              </button>
+              <button
+                type="button"
+                onClick={() => setNoteType('income')}
+                className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                  noteType === 'income'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Pemasukan
+              </button>
+            </div>
+          </div>
+
+          {/* Nominal */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Nominal (Rp)
+            </label>
+            <input
+              type="number"
+              placeholder="contoh: 25000"
+              value={noteAmount}
+              onChange={(e) => setNoteAmount(e.target.value)}
+              required
+              min={1}
+              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-brand-500"
+            />
+          </div>
+
+          {/* Judul / Catatan (Note) */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Catatan / Keperluan (Note)
+            </label>
+            <input
+              type="text"
+              placeholder="contoh: Makan siang soto, beli bensin, fee project..."
+              value={noteTitle}
+              onChange={(e) => setNoteTitle(e.target.value)}
+              required
+              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-brand-500"
+            />
+          </div>
+
+          {/* Pilihan Dompet & Kategori */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                Sumber Dompet
+              </label>
+              <select
+                value={noteWalletId}
+                onChange={(e) => setNoteWalletId(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-500"
+              >
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name} ({formatRupiah(w.balance)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                Kategori
+              </label>
+              <select
+                value={noteCategoryId}
+                onChange={(e) => setNoteCategoryId(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-500"
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.emoji} {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Feedback Message */}
+          {noteFeedback && (
+            <div
+              className={`p-3 rounded-xl text-xs font-bold ${
+                noteFeedback.includes('✅')
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+              }`}
+            >
+              {noteFeedback}
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsNoteModalOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              isLoading={isSubmittingNote}
+            >
+              Simpan ke Kalender
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { runTataDanaVerificationSuite } from '@/test/verify-engine';
 import { runTataAiVerification } from '@/test/tata-ai-verify';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const result = runTataDanaVerificationSuite();
   const tataAiResult = runTataAiVerification();

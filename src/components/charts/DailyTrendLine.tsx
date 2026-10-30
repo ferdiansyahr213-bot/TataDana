@@ -15,8 +15,17 @@ interface DailyTrendLineProps {
 export const DailyTrendLine: React.FC<DailyTrendLineProps> = ({ data }) => {
   const [hoveredDay, setHoveredDay] = useState<DailySpending | null>(null);
 
-  if (!data.length) {
-    return <div className="h-44 flex items-center justify-center text-slate-400 text-xs">Belum ada data harian</div>;
+  const totalAmount = data?.reduce((s, d) => s + d.amount, 0) || 0;
+
+  if (!data || !data.length || totalAmount === 0) {
+    return (
+      <div className="h-44 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 p-6 text-center">
+        <p className="text-xs font-bold text-slate-700">Belum ada pengeluaran harian bulan ini</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">
+          Tren pengeluaran harian akan muncul otomatis saat Anda mencatat transaksi.
+        </p>
+      </div>
+    );
   }
 
   const maxAmount = Math.max(...data.map((d) => d.amount), 50000);

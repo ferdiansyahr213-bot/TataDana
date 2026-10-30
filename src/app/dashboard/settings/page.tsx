@@ -17,20 +17,60 @@ import {
   Clock, 
   Sparkles, 
   Plus, 
-  ExternalLink 
+  ExternalLink,
+  Mail,
+  Lock,
+  Smartphone,
+  Camera,
+  Check
 } from 'lucide-react';
 import { UserProfile, Category } from '@/lib/types';
 import { formatDailyReminderReply } from '@/lib/telegram/formatter';
 
+const AVATAR_PRESETS = [
+  {
+    id: 'avatar_1',
+    name: 'Profesional Elegan',
+    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+    description: 'Executive Modern',
+  },
+  {
+    id: 'avatar_2',
+    name: 'Kreator Cerdas',
+    url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
+    description: 'Tech & Finance',
+  },
+  {
+    id: 'avatar_3',
+    name: 'Founder Dinamis',
+    url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
+    description: 'Digital Leader',
+  },
+  {
+    id: 'avatar_4',
+    name: 'FinTech Strategist',
+    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
+    description: 'Global Investor',
+  },
+];
+
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<'profile' | 'telegram' | 'reminder' | 'categories'>('telegram');
+  const [activeTab, setActiveTab] = useState<'profile' | 'telegram' | 'reminder' | 'categories'>('profile');
   const [user, setUser] = useState<UserProfile | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  // Profile Form
+  // Profile Form States
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80');
+  const [customAvatarInput, setCustomAvatarInput] = useState('');
   const [currency, setCurrency] = useState('IDR');
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Telegram Form
   const [botToken, setBotToken] = useState('');
@@ -59,8 +99,11 @@ export default function SettingsPage() {
       if (data.ok) {
         setUser(data.user);
         setCategories(data.categories);
-        setFullName(data.user.full_name);
-        setCurrency(data.user.currency);
+        setFullName(data.user.full_name || '');
+        setEmail(data.user.email || '');
+        setPhoneNumber(data.user.phone_number || '');
+        setCurrency(data.user.currency || 'IDR');
+        setAvatarUrl(data.user.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80');
         setBotToken(data.user.telegram_bot_token || '');
         setTelegramStatus(data.user.telegram_connected ? 'connected' : 'disconnected');
         setReminderEnabled(data.user.reminder_enabled);
@@ -80,19 +123,57 @@ export default function SettingsPage() {
   // Profile Save
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'update_profile',
-        payload: { full_name: fullName, currency },
-        userId: user?.id,
-      }),
-    });
-    if (res.ok) {
-      setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 3000);
-      loadData();
+    setProfileError(null);
+
+    if (newPassword && newPassword !== confirmPassword) {
+      setProfileError('Konfirmasi kata sandi tidak cocok. Harap periksa kembali.');
+      return;
+    }
+
+    setIsSavingProfile(true);
+
+    const payload: any = {
+      full_name: fullName,
+      email: email,
+      phone_number: phoneNumber,
+      avatar_url: avatarUrl,
+      currency,
+    };
+
+    if (newPassword) {
+      payload.password = newPassword;
+    }
+
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_profile',
+          payload,
+          userId: user?.id,
+        }),
+      });
+
+      if (res.ok) {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('user_name', fullName);
+          sessionStorage.setItem('user_email', email);
+          sessionStorage.setItem('user_phone', phoneNumber);
+          sessionStorage.setItem('user_avatar', avatarUrl);
+        }
+        setProfileSaved(true);
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => setProfileSaved(false), 3500);
+        loadData();
+      } else {
+        setProfileError('Gagal menyimpan profil.');
+      }
+    } catch (err: any) {
+      setProfileError(err.message || 'Error saat menyimpan profil.');
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -263,14 +344,14 @@ export default function SettingsPage() {
                 <Send className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-slate-900">Bot Telegram Aktif (@ReviKerudungTataDana_bot)</h4>
+                <h4 className="text-xs font-bold text-slate-900">Bot Telegram Aktif (@TataDanaVinaBot)</h4>
                 <p className="text-[11px] text-slate-500">
                   Bot Telegram Anda aktif dan siap menerima pesan teks, voice note, serta foto struk langsung dari handphone.
                 </p>
               </div>
             </div>
             <a
-              href="https://t.me/ReviKerudungTataDana_bot"
+              href="https://t.me/TataDanaVinaBot"
               target="_blank"
               rel="noopener noreferrer"
               className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shrink-0 inline-flex items-center gap-1.5 shadow-sm"
@@ -537,47 +618,219 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* TAB 4: Profile Tab */}
+      {/* TAB 4: Profile Tab per specification */}
       {activeTab === 'profile' && (
-        <div className="space-y-6 max-w-2xl">
-          <Card className="p-6">
-            <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
-              <Input
-                label="Nama Lengkap"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-
-              <Input
-                label="Nomor HP (Terverifikasi OTP)"
-                value={user?.phone_number || ''}
-                disabled
-                helperText="Nomor HP digunakan untuk menghubungkan akun Telegram."
-              />
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Mata Uang Default
-                </label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full rounded-xl border border-surface-border bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-brand-500"
-                >
-                  <option value="IDR">IDR — Rupiah Indonesia (Rp)</option>
-                </select>
+        <div className="space-y-6 max-w-3xl">
+          {/* Current Avatar & User Card */}
+          <Card className="p-6 bg-gradient-to-r from-blue-50/70 via-white to-indigo-50/50 border-slate-200">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+              <div className="relative group">
+                <img
+                  src={avatarUrl}
+                  alt={fullName || 'Avatar Pengguna'}
+                  className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-lg ring-2 ring-brand-500/20"
+                />
+                <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-xl bg-brand-500 text-white flex items-center justify-center shadow-md border-2 border-white">
+                  <Camera className="w-3.5 h-3.5" />
+                </div>
               </div>
 
+              <div className="text-center sm:text-left flex-1">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <h3 className="text-lg font-black text-slate-900">{fullName || 'Pengguna TataDana'}</h3>
+                  <Badge variant={user?.role === 'superadmin' || user?.role === 'admin' ? 'red' : 'brand'} size="sm">
+                    {user?.role === 'superadmin' ? 'Superadmin' : user?.role === 'admin' ? 'Admin' : 'User Biasa'}
+                  </Badge>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    user?.verification_status === 'pending'
+                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  }`}>
+                    {user?.verification_status === 'pending' ? 'Pending Verifikasi' : 'Terverifikasi (Verified)'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-mono mt-1">{email || 'email@tatadana.id'}</p>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">{phoneNumber || '08xxxxxxxxxx'}</p>
+                <div className="mt-3 flex flex-wrap gap-2 justify-center sm:justify-start text-[11px] text-slate-600">
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200">
+                    Paket: <strong className="text-brand-600 uppercase">{user?.plan || 'Starter'}</strong>
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200">
+                    Mata Uang: <strong>{currency}</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* 4 Pilihan Pengganti Avatar Preset */}
+          <Card className="p-6">
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-brand-600" />
+                <span>Pilih Foto Profil (4 Pilihan Avatar Preset)</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Klik salah satu avatar preset di bawah ini untuk langsung mengganti foto profil Anda secara instan.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+              {AVATAR_PRESETS.map((preset) => {
+                const isSelected = avatarUrl === preset.url;
+                return (
+                  <div
+                    key={preset.id}
+                    onClick={() => setAvatarUrl(preset.url)}
+                    className={`p-3 rounded-2xl border-2 transition-all cursor-pointer flex flex-col items-center text-center relative group ${
+                      isSelected
+                        ? 'border-brand-500 bg-blue-50/60 shadow-md ring-2 ring-brand-400/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="relative">
+                      <img
+                        src={preset.url}
+                        alt={preset.name}
+                        className="w-16 h-16 rounded-2xl object-cover shadow-sm transition-transform group-hover:scale-105"
+                      />
+                      {isSelected && (
+                        <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center shadow-md border-2 border-white">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="font-bold text-slate-900 text-xs mt-2 truncate w-full block">
+                      {preset.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium truncate w-full block mt-0.5">
+                      {preset.description}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Custom Avatar URL option */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-2">
+              <input
+                type="url"
+                placeholder="Atau tempel URL gambar kustom di sini..."
+                value={customAvatarInput}
+                onChange={(e) => setCustomAvatarInput(e.target.value)}
+                className="w-full sm:flex-1 text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-brand-500"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (customAvatarInput.trim()) {
+                    setAvatarUrl(customAvatarInput.trim());
+                    setCustomAvatarInput('');
+                  }
+                }}
+                disabled={!customAvatarInput.trim()}
+                className="text-xs shrink-0"
+              >
+                Gunakan URL Kustom
+              </Button>
+            </div>
+          </Card>
+
+          {/* Form Detail Pengguna & Kata Sandi */}
+          <Card className="p-6">
+            <h3 className="text-sm font-bold text-slate-900 mb-4">Informasi Akun &amp; Kredensial</h3>
+            <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Nama Lengkap"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  leftIcon={<User className="w-4 h-4 text-slate-400" />}
+                  placeholder="Nama Lengkap Anda"
+                  required
+                />
+
+                <Input
+                  label="Alamat Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  leftIcon={<Mail className="w-4 h-4 text-slate-400" />}
+                  placeholder="nama@email.com"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Nomor Handphone"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  leftIcon={<Smartphone className="w-4 h-4 text-slate-400" />}
+                  placeholder="08xxxxxxxxxx"
+                  helperText="Nomor aktif yang digunakan untuk menghubungkan akun Telegram."
+                  required
+                />
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Mata Uang Default
+                  </label>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="w-full rounded-xl border border-surface-border bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="IDR">IDR — Rupiah Indonesia (Rp)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Password Section */}
+              <div className="pt-3 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
+                  Ganti Kata Sandi (Opsional)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Kata Sandi Baru"
+                    type="password"
+                    placeholder="Kosongkan jika tidak ingin mengubah"
+                    leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+
+                  <Input
+                    label="Konfirmasi Kata Sandi Baru"
+                    type="password"
+                    placeholder="Ulangi kata sandi baru"
+                    leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {profileError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {profileError}
+                </div>
+              )}
+
               {profileSaved && (
-                <p className="text-emerald-600 font-semibold text-xs">
-                  ✅ Profil berhasil diperbarui!
-                </p>
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>✅ Profil, foto avatar, dan kredensial berhasil disimpan!</span>
+                </div>
               )}
 
               <div className="flex justify-end pt-2">
-                <Button type="submit" variant="primary" size="sm">
-                  Simpan Profil
+                <Button type="submit" variant="primary" size="sm" isLoading={isSavingProfile}>
+                  Simpan Perubahan Profil
                 </Button>
               </div>
             </form>

@@ -101,7 +101,7 @@ Kirim rekaman suara singkat (maks 60s), bot akan otomatis mencatatnya.
 export function formatCalendarReply(transactions: Transaction[], user: UserProfile): string {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
-  const todayTx = transactions.filter(t => t.transaction_date.startsWith(todayStr));
+  const todayTx = transactions.filter(t => (t.transaction_date || '').startsWith(todayStr));
   
   let incomeToday = 0;
   let expenseToday = 0;

@@ -38,10 +38,14 @@ import {
   CreditCard,
   MessageSquare,
   CheckCircle2,
-  ShieldAlert
+  ShieldAlert,
+  MessageCircle,
 } from 'lucide-react';
-import { Transaction, Wallet, Category, Budget, UserProfile, InitiatePaymentPayload } from '@/lib/types';
-import { parsePurchaseIntent } from '@/lib/ai/provider-manager';
+import { UpgradeProModal } from '@/components/dashboard/UpgradeProModal';
+import { Transaction, Wallet, Category, Budget, UserProfile, InitiatePaymentPayload, RecordIncomePayload, TataAiActionPayload } from '@/lib/types';
+import { parseTransactionIntent, parsePurchaseIntent, extractActionPayloadFromMessage } from '@/lib/ai/provider-manager';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getTodayWIB, getCurrentMonthPeriodWIB, formatShortWIB } from '@/lib/utils/date-wib';
 import { 
@@ -54,13 +58,14 @@ import {
   subscribeToTransactions, 
   calculateAggregatedMetrics 
 } from '@/lib/supabase/data-service';
+import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
 
 interface AiChatMessage {
   id: string;
   sender: 'user' | 'bot';
   text: string;
   time: string;
-  paymentPayload?: InitiatePaymentPayload;
+  paymentPayload?: TataAiActionPayload | any;
   paymentStatus?: 'pending' | 'success';
   chosenMethod?: string;
 }
@@ -79,6 +84,7 @@ function DashboardOverviewContent() {
   const [periodFilter, setPeriodFilter] = useState<'harian' | 'mingguan' | 'bulanan' | 'tahunan'>('bulanan');
   const [analyticsTab, setAnalyticsTab] = useState<'cashflow' | 'category' | 'trend'>('cashflow');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Recent transactions search query
@@ -257,48 +263,91 @@ function DashboardOverviewContent() {
 
   const pieChartData = Object.values(categorySpendingMap);
 
-  // Dynamic Cashflow Data based on active period filter
+  // Dynamic Cashflow Data aggregated strictly from real transactions
   let cashflowData: CashflowItem[] = [];
   if (periodFilter === 'harian') {
-    cashflowData = [
-      { month: '08:00', income: 0, expense: 35000 },
-      { month: '12:00', income: 500000, expense: 45000 },
-      { month: '16:00', income: 0, expense: 80000 },
-      { month: '20:00', income: 0, expense: 25000 },
+    const todayTxs = transactions.filter((t) => t.transaction_date.startsWith(todayStr));
+    const slots = [
+      { label: '06:00', startH: 0, endH: 9 },
+      { label: '12:00', startH: 9, endH: 15 },
+      { label: '18:00', startH: 15, endH: 20 },
+      { label: '21:00', startH: 20, endH: 24 },
     ];
+    cashflowData = slots.map((s) => {
+      const slotTxs = todayTxs.filter((t) => {
+        const d = new Date(t.transaction_date);
+        const hour = isNaN(d.getHours()) ? 12 : d.getHours();
+        return hour >= s.startH && hour < s.endH;
+      });
+      const income = slotTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+      const expense = slotTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+      return { month: s.label, income, expense };
+    });
   } else if (periodFilter === 'mingguan') {
-    cashflowData = [
-      { month: 'Sen', income: 1200000, expense: 450000 },
-      { month: 'Sel', income: 300000, expense: 280000 },
-      { month: 'Rab', income: 0, expense: 350000 },
-      { month: 'Kam', income: 500000, expense: 410000 },
-      { month: 'Jum', income: 2500000, expense: 850000 },
-      { month: 'Sab', income: 100000, expense: 620000 },
-      { month: 'Min', income: 0, expense: 390000 },
-    ];
+    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const dateStr = d.toISOString().split('T')[0];
+      const label = dayNames[d.getDay()];
+      return { label, dateStr };
+    });
+
+    cashflowData = days.map((day) => {
+      const dayTxs = transactions.filter((t) => t.transaction_date.startsWith(day.dateStr));
+      const income = dayTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+      const expense = dayTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+      return { month: day.label, income, expense };
+    });
   } else if (periodFilter === 'tahunan') {
-    cashflowData = [
-      { month: '2024', income: 98000000, expense: 76000000 },
-      { month: '2025', income: 125000000, expense: 89000000 },
-      { month: '2026', income: 148000000, expense: 94000000 },
-    ];
+    const currentYear = now.getFullYear();
+    const years = [currentYear - 2, currentYear - 1, currentYear];
+    cashflowData = years.map((yr) => {
+      const yrStr = yr.toString();
+      const yrTxs = transactions.filter((t) => t.transaction_date.startsWith(yrStr));
+      const income = yrTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+      const expense = yrTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+      return { month: yrStr, income, expense };
+    });
   } else {
-    // Bulanan (default 6 months)
-    cashflowData = [
-      { month: 'Mei', income: 10500000, expense: 7800000 },
-      { month: 'Jun', income: 11000000, expense: 8200000 },
-      { month: 'Jul', income: 12500000, expense: 9100000 },
-      { month: 'Ags', income: 12000000, expense: 7400000 },
-      { month: 'Sep', income: 13500000, expense: 8900000 },
-      { month: 'Okt', income: periodIncome || 15000000, expense: periodExpense || 3200000 },
-    ];
+    // Bulanan (6 months range up to current month)
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - (5 - i));
+      const ymStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = monthNames[d.getMonth()];
+      return { label, ymStr };
+    });
+
+    cashflowData = months.map((m) => {
+      const mTxs = transactions.filter((t) => t.transaction_date.startsWith(m.ymStr));
+      const income = mTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+      const expense = mTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+      return { month: m.label, income, expense };
+    });
   }
 
-  // Daily Trend Line Data for current month
-  const dailyData = Array.from({ length: 15 }, (_, i) => ({
-    day: i + 1,
-    amount: (i + 1) % 3 === 0 ? 120000 + i * 15000 : 25000 + i * 8000,
-  }));
+  // Daily Trend Line Data for current month aggregated strictly from real expenses
+  const currentDay = now.getDate();
+  const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentMonthExpenseTxs = transactions.filter(
+    (t) => t.type === 'expense' && t.transaction_date.startsWith(currentMonthPrefix)
+  );
+
+  const daysToTrack = Math.max(currentDay, 15);
+  const dailyData = Array.from({ length: daysToTrack }, (_, i) => {
+    const dayNum = i + 1;
+    const dayStr = `${currentMonthPrefix}-${String(dayNum).padStart(2, '0')}`;
+    const dayAmount = currentMonthExpenseTxs
+      .filter((t) => t.transaction_date.startsWith(dayStr))
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return {
+      day: dayNum,
+      amount: dayAmount,
+    };
+  });
 
   // Filter recent transactions
   const filteredRecentTransactions = transactions
@@ -342,38 +391,63 @@ function DashboardOverviewContent() {
       (m) => m.sender === 'bot' && m.paymentPayload && m.paymentStatus === 'pending'
     );
     const qLower = q.toLowerCase();
-    const isPay1 = qLower === '1' || qLower === '1.' || qLower.includes('saldo');
-    const isPay2 = qLower === '2' || qLower === '2.' || qLower.includes('qris');
-    const isPay3 = qLower === '3' || qLower === '3.' || qLower.includes('transfer bank') || qLower.includes('bank');
-    const isPay4 = qLower === '4' || qLower === '4.' || qLower.includes('tunai') || qLower.includes('cash') || qLower.includes('manual');
+    if (lastPendingMsg && lastPendingMsg.paymentPayload) {
+      let matchedWallet: any = undefined;
+      const numMatch = qLower.match(/^([1-9]\d*)\.?$/);
+      if (numMatch) {
+        const idx = parseInt(numMatch[1], 10) - 1;
+        if (idx >= 0 && idx < wallets.length) {
+          matchedWallet = wallets[idx];
+        }
+      }
 
-    if (lastPendingMsg && lastPendingMsg.paymentPayload && (isPay1 || isPay2 || isPay3 || isPay4)) {
-      const chosenMethod = isPay1
-        ? 'TATADANA_WALLET'
-        : isPay2
-        ? 'QRIS'
-        : isPay3
-        ? 'BANK_TRANSFER'
-        : 'CASH';
-      setTimeout(() => {
-        handleExecutePayment(chosenMethod, lastPendingMsg.paymentPayload!.data, lastPendingMsg.id);
-        setIsAiTyping(false);
-      }, 400);
-      return;
+      if (!matchedWallet) {
+        matchedWallet = wallets.find(
+          (w) => qLower.includes(w.name.toLowerCase()) || w.name.toLowerCase().includes(qLower)
+        );
+      }
+
+      if (!matchedWallet && (qLower.includes('tunai') || qLower.includes('cash') || qLower.includes('manual'))) {
+        matchedWallet = wallets.find((w) => w.type === 'cash' || /tunai|cash|kas/i.test(w.name));
+      }
+
+      if (matchedWallet) {
+        const payloadObj = lastPendingMsg.paymentPayload as any;
+        const isPendingIncome = payloadObj?.action === 'RECORD_INCOME' || payloadObj?.data?.type === 'income';
+        const pendingAmount = payloadObj?.data?.amount || 0;
+        const pendingDesc = payloadObj?.data?.title || payloadObj?.data?.item || 'Transaksi';
+        const pendingCat = payloadObj?.data?.category;
+
+        setTimeout(() => {
+          handleExecutePayment(
+            {
+              wallet_id: matchedWallet.id,
+              amount: pendingAmount,
+              description: pendingDesc,
+              category: pendingCat,
+              wallet_name: matchedWallet.name,
+              type: isPendingIncome ? 'income' : 'expense',
+            },
+            lastPendingMsg.id
+          );
+          setIsAiTyping(false);
+        }, 400);
+        return;
+      }
     }
 
-    // 2. Check if input is a short purchase/expense intent (e.g. "cilok 2rb", "kopi susu 15k", "pulsa 50rb")
-    const purchaseIntent = parsePurchaseIntent(q);
-    if (purchaseIntent) {
+    // 2. Check if input is a short transaction intent (income or expense)
+    const txIntent = parseTransactionIntent(q, wallets);
+    if (txIntent) {
       setTimeout(() => {
         setAiMessages((prev) => [
           ...prev,
           {
             id: `b_${Date.now()}`,
             sender: 'bot',
-            text: purchaseIntent.replyText,
+            text: txIntent.replyText,
             time: 'Sekarang',
-            paymentPayload: purchaseIntent.payload,
+            paymentPayload: txIntent.payload,
             paymentStatus: 'pending',
           },
         ]);
@@ -418,48 +492,64 @@ function DashboardOverviewContent() {
   };
 
   const handleExecutePayment = async (
-    method: 'TATADANA_WALLET' | 'QRIS' | 'BANK_TRANSFER' | 'CASH',
-    data: { item: string; amount: number; category: string },
+    params: {
+      wallet_id: string;
+      amount: number;
+      description?: string;
+      category?: string;
+      wallet_name?: string;
+      type?: 'expense' | 'income';
+    },
     messageId?: string
   ) => {
-    const methodMap = {
-      TATADANA_WALLET: 'Saldo TataDana',
-      QRIS: 'QRIS',
-      BANK_TRANSFER: 'Transfer Bank',
-      CASH: 'Tunai / Catat Manual',
-    };
-    const methodLabel = methodMap[method] || 'Saldo TataDana';
+    const txType = params.type || 'expense';
+
+    // 1. Validasi Ketat: Hilangkan fallback default dompet sepihak
+    if (!params.wallet_id || typeof params.wallet_id !== 'string' || params.wallet_id.trim() === '') {
+      console.error('handleExecutePayment: wallet_id wajib disertakan');
+      return;
+    }
+
+    const targetWallet = wallets.find((w) => w.id === params.wallet_id);
+    if (!targetWallet) {
+      console.error('handleExecutePayment: Dompet tidak ditemukan untuk id:', params.wallet_id);
+      return;
+    }
+
+    const walletLabel = targetWallet.name;
+    const itemName = params.description || (txType === 'income' ? 'Pemasukan' : 'Pembelian');
+    const amountVal = params.amount;
 
     if (messageId) {
       setAiMessages((prev) =>
         prev.map((m) =>
-          m.id === messageId ? { ...m, paymentStatus: 'success', chosenMethod: methodLabel } : m
+          m.id === messageId ? { ...m, paymentStatus: 'success', chosenMethod: walletLabel } : m
         )
       );
     }
 
-    const targetWallet =
-      wallets.find((w) => (method === 'CASH' ? w.type === 'cash' : w.is_default)) || wallets[0];
-    const targetCategory =
+    let targetCategory =
       categories.find(
         (c) =>
-          c.name.toLowerCase().includes(data.category.toLowerCase()) ||
-          (data.category === 'Food & Beverage' && c.name.toLowerCase().includes('makan')) ||
-          (data.category === 'Utilities' && c.name.toLowerCase().includes('utilitas')) ||
-          (data.category === 'Transport' && c.name.toLowerCase().includes('transport'))
-      ) || categories[0];
+          (params.category && c.name.toLowerCase().includes(params.category.toLowerCase())) ||
+          (txType === 'income' && c.type === 'income') ||
+          (txType === 'expense' && params.category && c.name.toLowerCase().includes(params.category.toLowerCase()))
+      ) ||
+      categories.find((c) => c.type === txType) ||
+      categories[0] ||
+      { id: 'cat_1', name: params.category || (txType === 'income' ? 'Gaji / Pendapatan' : 'Belanja'), emoji: txType === 'income' ? '💰' : '🛍️' };
 
     try {
       const payload = {
         user_id: user?.id || 'usr_demo_123',
-        wallet_id: targetWallet?.id || selectedWalletId,
-        wallet_name: targetWallet?.name,
-        category_id: targetCategory?.id || selectedCategoryId,
-        category_name: targetCategory?.name,
-        category_emoji: targetCategory?.emoji,
-        type: 'expense' as const,
-        amount: data.amount,
-        notes: `${data.item} (via ${methodLabel})`,
+        wallet_id: targetWallet.id, // WAJIB wallet_id yang diklik pengguna
+        wallet_name: walletLabel,
+        category_id: targetCategory.id,
+        category_name: targetCategory.name,
+        category_emoji: targetCategory.emoji || (txType === 'income' ? '💰' : '🛍️'),
+        type: txType,
+        amount: amountVal,
+        notes: txType === 'income' ? `${itemName} (masuk ke ${walletLabel})` : `${itemName} (via ${walletLabel})`,
         source: 'web' as const,
         transaction_date: new Date().toISOString(),
       };
@@ -468,16 +558,32 @@ function DashboardOverviewContent() {
 
       if (res.ok) {
         await fetchData();
-        const formattedAmt = new Intl.NumberFormat('id-ID').format(data.amount);
-        setAiMessages((prev) => [
-          ...prev,
-          {
-            id: `b_pay_${Date.now()}`,
-            sender: 'bot',
-            text: `✅ Pembayaran **${data.item}** sebesar **Rp ${formattedAmt}** via **${methodLabel}** berhasil dicatat ke Supabase! Saldo dompet dan riwayat transaksi telah otomatis diperbarui.`,
-            time: 'Sekarang',
-          },
-        ]);
+        const formattedAmt = new Intl.NumberFormat('id-ID').format(amountVal);
+        const newBalance = txType === 'income'
+          ? (targetWallet.balance || 0) + amountVal
+          : (targetWallet.balance || 0) - amountVal;
+
+        if (txType === 'income') {
+          setAiMessages((prev) => [
+            ...prev,
+            {
+              id: `b_inc_${Date.now()}`,
+              sender: 'bot',
+              text: `🎉 Pemasukan **${itemName}** sebesar **Rp ${formattedAmt}** berhasil ditambahkan ke **${walletLabel}**! Saldo dompet **${walletLabel}** (ID: \`${targetWallet.id}\`) sekarang menjadi **${formatRupiah(newBalance)}**.`,
+              time: 'Sekarang',
+            },
+          ]);
+        } else {
+          setAiMessages((prev) => [
+            ...prev,
+            {
+              id: `b_pay_${Date.now()}`,
+              sender: 'bot',
+              text: `✅ Pembayaran **${itemName}** sebesar **Rp ${formattedAmt}** via **${walletLabel}** berhasil dicatat ke Supabase! Saldo dompet **${walletLabel}** (ID: \`${targetWallet.id}\`) sekarang menjadi **${formatRupiah(newBalance)}**.`,
+              time: 'Sekarang',
+            },
+          ]);
+        }
       }
     } catch (err) {
       console.error('Error executing payment:', err);
@@ -512,7 +618,7 @@ function DashboardOverviewContent() {
             <span>👁️ <strong>Mode Impersonasi Admin:</strong> Melihat akun <em>{user?.full_name || impersonateId}</em></span>
           </div>
           <button
-            onClick={() => router.push('/admin')}
+            onClick={() => router.push('/dashboard/admin')}
             className="px-3 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-xs font-bold"
           >
             Kembali ke Admin
@@ -523,6 +629,8 @@ function DashboardOverviewContent() {
       <Header
         title="Ringkasan Keuangan"
         subtitle="Pantau arus kas, dompet, dan budget otomatis dari Telegram"
+        userPlan={user?.plan}
+        onUpgradeClick={() => setIsUpgradeModalOpen(true)}
         onQuickAdd={() => setIsAddModalOpen(true)}
       />
 
@@ -536,8 +644,8 @@ function DashboardOverviewContent() {
       {/* 2. Stat Cards (With Mini Sparklines & Dynamic Budget Progress Bar) */}
       <StatCards
         totalBalance={totalBalance}
-        monthlyIncome={periodIncome || 15000000}
-        monthlyExpense={periodExpense || 3200000}
+        monthlyIncome={periodIncome}
+        monthlyExpense={periodExpense}
         remainingBudget={remainingBudget}
         totalBudget={totalBudgetAmount}
       />
@@ -680,6 +788,32 @@ function DashboardOverviewContent() {
               </a>
             </div>
           </Card>
+
+          {/* Quick Upgrade to Pro Card via WhatsApp */}
+          {user?.plan !== 'pro' && (
+            <Card className="p-4 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-blue-500/10 border border-amber-200/90 rounded-2xl shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                  <Sparkles className="w-4 h-4 text-amber-600 fill-amber-500/20" />
+                  <span>TataDana Pro</span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full">
+                  Rp49rb / bln
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Nikmati limit transaksi & dompet unlimited, AI Financial Advisor, dan prioritas tanpa antrean.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsUpgradeModalOpen(true)}
+                className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs text-center transition-all shadow-xs flex items-center justify-center gap-1.5"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>Upgrade ke Pro via WhatsApp</span>
+              </button>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -955,86 +1089,163 @@ function DashboardOverviewContent() {
           <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-gradient-to-b from-slate-950 to-slate-900 text-xs">
             {aiMessages.map((msg) => {
               const isUser = msg.sender === 'user';
+              const cleanedText = msg.text
+                .replace(/```(?:json)?\s*\{[\s\S]*?"action"[\s\S]*?\}\s*```/gi, '')
+                .replace(/\{[\s\S]*?"action"\s*:\s*"(?:INITIATE_PAYMENT|RECORD_INCOME)"[\s\S]*?\}/gi, '')
+                .replace(/\n*Pilihan metode:\s*\n*(?:[1-9]\d*\.[^\n]*\n*)+/gi, '')
+                .replace(/\n*Pilihan metode:\s*$/gi, '')
+                .replace(/\n*Silakan pilih dompet tujuan penerimaan:\s*\n*(?:[1-9]\d*\.[^\n]*\n*)+/gi, '')
+                .replace(/\n*Silakan pilih dompet tujuan penerimaan:\s*$/gi, '')
+                .trim();
+
               return (
                 <div key={msg.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-2`}>
                   <div
-                    className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 shadow-xs whitespace-pre-wrap leading-relaxed ${
+                    className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 shadow-xs leading-relaxed ${
                       isUser
                         ? 'bg-blue-600 text-white rounded-tr-none'
                         : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700/70'
                     }`}
                   >
-                    {msg.text}
+                    <div className="chat-markdown prose-sm max-w-none break-words">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          strong: ({ children }) => (
+                            <strong className="font-extrabold text-white">
+                              {children}
+                            </strong>
+                          ),
+                          em: ({ children }) => (
+                            <em className="italic text-slate-300">
+                              {children}
+                            </em>
+                          ),
+                          code: ({ children }) => (
+                            <code className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-pink-400 border border-slate-700">
+                              {children}
+                            </code>
+                          ),
+                          p: ({ children }) => (
+                            <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="list-disc list-inside mb-1.5 space-y-0.5 pl-1">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal list-inside mb-1.5 space-y-0.5 pl-1">{children}</ol>
+                          ),
+                        }}
+                      >
+                        {cleanedText}
+                      </ReactMarkdown>
+                    </div>
                   </div>
 
-                  {/* Payment selector interactive action card */}
+                  {/* Interactive Action Card (Income / Expense) */}
                   {msg.paymentPayload && (
-                    <div className="w-[88%] bg-slate-800/95 border border-blue-500/40 rounded-2xl p-3 shadow-lg text-slate-200 space-y-2.5">
-                      <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">
-                        <div className="flex items-center gap-1.5 font-bold text-white text-xs">
-                          <CreditCard className="w-3.5 h-3.5 text-blue-400" />
-                          <span>Pilih Metode Pembayaran</span>
+                    (() => {
+                      const payloadObj = msg.paymentPayload as any;
+                      const isIncomeAction =
+                        payloadObj.action === 'RECORD_INCOME' ||
+                        payloadObj.data?.type === 'income';
+                      const itemTitle =
+                        payloadObj.data?.title ||
+                        payloadObj.data?.item ||
+                        (isIncomeAction ? 'Pemasukan' : 'Pembelian');
+                      const amountVal = payloadObj.data?.amount || 0;
+
+                      return (
+                        <div
+                          className={`w-[88%] bg-slate-800/95 border rounded-2xl p-3 shadow-lg text-slate-200 space-y-2.5 ${
+                            isIncomeAction ? 'border-emerald-500/50' : 'border-blue-500/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                            <div className="flex items-center gap-1.5 font-bold text-white text-xs">
+                              {isIncomeAction ? (
+                                <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                              )}
+                              <span>{isIncomeAction ? 'Konfirmasi Pemasukan' : 'Pilih Metode Pembayaran'}</span>
+                            </div>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isIncomeAction
+                                  ? 'text-emerald-300 bg-emerald-500/20 border-emerald-500/30'
+                                  : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                              }`}
+                            >
+                              {isIncomeAction ? `+ ${formatRupiah(amountVal)}` : formatRupiah(amountVal)}
+                            </span>
+                          </div>
+
+                          {msg.paymentStatus === 'success' ? (
+                            <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>
+                                {isIncomeAction ? 'Diterima ke' : 'Terbayar via'}{' '}
+                                <strong>{msg.chosenMethod}</strong>
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {(wallets && wallets.length > 0
+                                ? wallets
+                                : [
+                                    { id: 'wal_def', name: 'Dompet Utama', balance: totalBalance, type: 'bank' },
+                                  ]
+                              ).map((w, idx) => (
+                                <button
+                                  key={w.id}
+                                  onClick={() =>
+                                    handleExecutePayment(
+                                      {
+                                        wallet_id: w.id,
+                                        amount: amountVal,
+                                        description: itemTitle,
+                                        category: msg.paymentPayload!.data.category,
+                                        wallet_name: w.name,
+                                        type: isIncomeAction ? 'income' : 'expense',
+                                      },
+                                      msg.id
+                                    )
+                                  }
+                                  className={`flex items-center gap-2 p-2 rounded-xl bg-slate-900/90 border text-left transition-all text-[11px] group ${
+                                    isIncomeAction
+                                      ? 'hover:bg-emerald-600/20 border-slate-700 hover:border-emerald-500'
+                                      : 'hover:bg-blue-600/30 border-slate-700 hover:border-blue-500'
+                                  }`}
+                                >
+                                  <span className="text-sm">
+                                    {w.type === 'bank'
+                                      ? '🏦'
+                                      : w.type === 'ewallet'
+                                      ? '📱'
+                                      : w.type === 'cash'
+                                      ? '💵'
+                                      : '👛'}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div
+                                      className={`font-semibold text-white truncate ${
+                                        isIncomeAction ? 'group-hover:text-emerald-300' : 'group-hover:text-blue-300'
+                                      }`}
+                                    >
+                                      {idx + 1}. {w.name}
+                                    </div>
+                                    <div className="text-[9px] text-slate-400 truncate">
+                                      Saldo: {formatRupiah(w.balance)}
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          {formatRupiah(msg.paymentPayload.data.amount)}
-                        </span>
-                      </div>
-
-                      {msg.paymentStatus === 'success' ? (
-                        <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>
-                            Terbayar via <strong>{msg.chosenMethod}</strong>
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-1.5">
-                          <button
-                            onClick={() => handleExecutePayment('TATADANA_WALLET', msg.paymentPayload!.data, msg.id)}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/90 hover:bg-blue-600/30 border border-slate-700 hover:border-blue-500 text-left transition-all text-[11px] group"
-                          >
-                            <span className="text-sm">👛</span>
-                            <div>
-                              <div className="font-semibold text-white group-hover:text-blue-300">1. Saldo TataDana</div>
-                              <div className="text-[9px] text-slate-400">Saldo: {formatRupiah(totalBalance)}</div>
-                            </div>
-                          </button>
-
-                          <button
-                            onClick={() => handleExecutePayment('QRIS', msg.paymentPayload!.data, msg.id)}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/90 hover:bg-emerald-600/30 border border-slate-700 hover:border-emerald-500 text-left transition-all text-[11px] group"
-                          >
-                            <span className="text-sm">📱</span>
-                            <div>
-                              <div className="font-semibold text-white group-hover:text-emerald-300">2. QRIS</div>
-                              <div className="text-[9px] text-slate-400">Scan bayar instan</div>
-                            </div>
-                          </button>
-
-                          <button
-                            onClick={() => handleExecutePayment('BANK_TRANSFER', msg.paymentPayload!.data, msg.id)}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/90 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500 text-left transition-all text-[11px] group"
-                          >
-                            <span className="text-sm">🏦</span>
-                            <div>
-                              <div className="font-semibold text-white group-hover:text-indigo-300">3. Transfer Bank</div>
-                              <div className="text-[9px] text-slate-400">BCA, Mandiri, BRI</div>
-                            </div>
-                          </button>
-
-                          <button
-                            onClick={() => handleExecutePayment('CASH', msg.paymentPayload!.data, msg.id)}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/90 hover:bg-amber-600/30 border border-slate-700 hover:border-amber-500 text-left transition-all text-[11px] group"
-                          >
-                            <span className="text-sm">💵</span>
-                            <div>
-                              <div className="font-semibold text-white group-hover:text-amber-300">4. Tunai / Manual</div>
-                              <div className="text-[9px] text-slate-400">Catat buku kas</div>
-                            </div>
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                      );
+                    })()
                   )}
                 </div>
               );
@@ -1055,6 +1266,12 @@ function DashboardOverviewContent() {
 
           {/* Quick Prompt Chips */}
           <div className="px-3 py-1.5 bg-slate-900 border-t border-slate-800 flex items-center gap-1.5 overflow-x-auto text-[10px] scrollbar-none">
+            <button
+              onClick={() => handleSendAi('gajian 5jt')}
+              className="whitespace-nowrap px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-full border border-emerald-500/30 transition-colors"
+            >
+              💰 gajian 5jt
+            </button>
             <button
               onClick={() => handleSendAi('cilok 2rb')}
               className="whitespace-nowrap px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-full border border-amber-500/30 transition-colors"
@@ -1119,6 +1336,36 @@ function DashboardOverviewContent() {
           <Sparkles className="w-3.5 h-3.5 text-amber-300" />
         </button>
       )}
+
+      {/* Pending Admin Approval Guard per specification */}
+      {user?.verification_status === 'pending' && user.role !== 'admin' && user.role !== 'superadmin' && (
+        <PendingVerificationModal
+          fullName={user.full_name}
+          email={user.email || ''}
+          phone={user.phone_number || ''}
+          userId={user.id}
+          onVerified={() => {
+            setUser((prev) => prev ? { ...prev, verification_status: 'verified' } : null);
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* Upgrade Pro WhatsApp Modal */}
+      <UpgradeProModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        user={
+          user
+            ? {
+                id: user.id,
+                fullName: user.full_name,
+                email: user.email,
+                phone: user.phone_number,
+              }
+            : null
+        }
+      />
     </div>
   );
 }

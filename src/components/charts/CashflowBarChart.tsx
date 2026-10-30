@@ -18,10 +18,20 @@ interface CashflowBarChartProps {
 export const CashflowBarChart: React.FC<CashflowBarChartProps> = ({ data, periodLabel = 'Bulanan' }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  if (!data || data.length === 0) {
+  const totalIncome = data?.reduce((s, d) => s + d.income, 0) || 0;
+  const totalExpense = data?.reduce((s, d) => s + d.expense, 0) || 0;
+  const hasData = totalIncome > 0 || totalExpense > 0;
+
+  if (!data || data.length === 0 || !hasData) {
     return (
-      <div className="h-56 flex items-center justify-center text-slate-400 text-xs">
-        Belum ada data aliran kas untuk periode ini
+      <div className="h-64 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 p-6 text-center">
+        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-2">
+          <TrendingUp className="w-5 h-5" />
+        </div>
+        <p className="text-xs font-bold text-slate-700">Belum ada transaksi pada periode ini</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">
+          Catat pemasukan atau pengeluaran untuk melihat grafik arus kas.
+        </p>
       </div>
     );
   }
@@ -32,8 +42,6 @@ export const CashflowBarChart: React.FC<CashflowBarChartProps> = ({ data, period
     1000000
   );
 
-  const totalIncome = data.reduce((s, d) => s + d.income, 0);
-  const totalExpense = data.reduce((s, d) => s + d.expense, 0);
   const netCashflow = totalIncome - totalExpense;
 
   return (
@@ -62,8 +70,8 @@ export const CashflowBarChart: React.FC<CashflowBarChartProps> = ({ data, period
       {/* Bars Chart Area */}
       <div className="h-56 flex items-end justify-between gap-2 sm:gap-4 pt-8 pb-2 border-b border-slate-100">
         {data.map((item, idx) => {
-          const incomeHeight = Math.max(6, (item.income / maxVal) * 100);
-          const expenseHeight = Math.max(6, (item.expense / maxVal) * 100);
+          const incomeHeight = item.income > 0 ? Math.max(6, (item.income / maxVal) * 100) : 0;
+          const expenseHeight = item.expense > 0 ? Math.max(6, (item.expense / maxVal) * 100) : 0;
           const isHovered = hoveredIdx === idx;
           const diff = item.income - item.expense;
 
@@ -93,14 +101,14 @@ export const CashflowBarChart: React.FC<CashflowBarChartProps> = ({ data, period
                 {/* Income Bar (Emerald) */}
                 <div
                   className={`w-1/2 max-w-[18px] bg-emerald-500 rounded-t-md transition-all duration-300 ${
-                    isHovered ? 'bg-emerald-400 shadow-sm brightness-110' : 'hover:bg-emerald-400'
+                    incomeHeight === 0 ? 'opacity-0' : isHovered ? 'bg-emerald-400 shadow-sm brightness-110' : 'hover:bg-emerald-400'
                   }`}
                   style={{ height: `${incomeHeight}%` }}
                 />
                 {/* Expense Bar (Blue) */}
                 <div
                   className={`w-1/2 max-w-[18px] bg-blue-600 rounded-t-md transition-all duration-300 ${
-                    isHovered ? 'bg-blue-500 shadow-sm brightness-110' : 'hover:bg-blue-500'
+                    expenseHeight === 0 ? 'opacity-0' : isHovered ? 'bg-blue-500 shadow-sm brightness-110' : 'hover:bg-blue-500'
                   }`}
                   style={{ height: `${expenseHeight}%` }}
                 />

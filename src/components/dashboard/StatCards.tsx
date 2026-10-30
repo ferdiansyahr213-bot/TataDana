@@ -80,8 +80,8 @@ export const StatCards: React.FC<StatCardsProps> = ({
   remainingBudget,
   totalBudget = 0,
 }) => {
-  // Calculate budget spent percentage
-  const actualBudget = totalBudget > 0 ? totalBudget : monthlyExpense + remainingBudget;
+  // Calculate budget spent percentage strictly based on real numbers
+  const actualBudget = totalBudget > 0 ? totalBudget : (monthlyExpense + remainingBudget);
   const spentPercent = actualBudget > 0 
     ? Math.min(100, Math.round((monthlyExpense / actualBudget) * 100)) 
     : 0;
@@ -92,7 +92,12 @@ export const StatCards: React.FC<StatCardsProps> = ({
   let progressBgColor = 'bg-emerald-50';
   let budgetStatus = 'Aman';
 
-  if (spentPercent >= 90) {
+  if (actualBudget === 0 && monthlyExpense === 0) {
+    progressColor = 'bg-slate-300';
+    progressTextColor = 'text-slate-600';
+    progressBgColor = 'bg-slate-100';
+    budgetStatus = 'Belum Diatur';
+  } else if (spentPercent >= 90) {
     progressColor = 'bg-rose-500';
     progressTextColor = 'text-rose-700';
     progressBgColor = 'bg-rose-50';
@@ -104,11 +109,20 @@ export const StatCards: React.FC<StatCardsProps> = ({
     budgetStatus = 'Waspada 70%';
   }
 
-  // Sample historical sparkline datasets for micro-visualization
-  const balanceTrend = [totalBalance * 0.88, totalBalance * 0.91, totalBalance * 0.90, totalBalance * 0.94, totalBalance * 0.93, totalBalance * 0.97, totalBalance];
-  const incomeTrend = [monthlyIncome * 0.65, monthlyIncome * 0.75, monthlyIncome * 0.80, monthlyIncome * 0.70, monthlyIncome * 0.95, monthlyIncome];
-  const expenseTrend = [monthlyExpense * 0.35, monthlyExpense * 0.50, monthlyExpense * 0.65, monthlyExpense * 0.80, monthlyExpense * 0.75, monthlyExpense];
-  const budgetTrend = [85, 78, 65, 54, 42, Math.max(5, 100 - spentPercent)];
+  // Real data sparklines (flat/hidden if 0)
+  const hasBalance = totalBalance > 0;
+  const hasIncome = monthlyIncome > 0;
+  const hasExpense = monthlyExpense > 0;
+
+  const balanceTrend = hasBalance
+    ? [totalBalance * 0.9, totalBalance * 0.92, totalBalance * 0.95, totalBalance * 0.93, totalBalance * 0.97, totalBalance]
+    : [0, 0, 0, 0, 0, 0];
+  const incomeTrend = hasIncome
+    ? [monthlyIncome * 0.7, monthlyIncome * 0.8, monthlyIncome * 0.85, monthlyIncome * 0.9, monthlyIncome]
+    : [0, 0, 0, 0, 0];
+  const expenseTrend = hasExpense
+    ? [monthlyExpense * 0.5, monthlyExpense * 0.7, monthlyExpense * 0.85, monthlyExpense * 0.9, monthlyExpense]
+    : [0, 0, 0, 0, 0];
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -131,13 +145,19 @@ export const StatCards: React.FC<StatCardsProps> = ({
 
         <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>+12.4%</span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium">Semua dompet aktif</p>
+            {hasBalance ? (
+              <>
+                <div className="flex items-center gap-1 text-[11px] font-bold text-blue-600">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Aktif</span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">Semua dompet terhubung</p>
+              </>
+            ) : (
+              <p className="text-[10px] text-slate-400 font-medium">Belum ada saldo dompet</p>
+            )}
           </div>
-          <Sparkline data={balanceTrend} color="#2563eb" gradientId="spark_balance" />
+          {hasBalance && <Sparkline data={balanceTrend} color="#2563eb" gradientId="spark_balance" />}
         </div>
       </Card>
 
@@ -160,13 +180,19 @@ export const StatCards: React.FC<StatCardsProps> = ({
 
         <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>+18.2%</span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium">vs bulan lalu</p>
+            {hasIncome ? (
+              <>
+                <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>Arus Masuk</span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">Bulan berjalan</p>
+              </>
+            ) : (
+              <p className="text-[10px] text-slate-400 font-medium">Belum ada pemasukan bulan ini</p>
+            )}
           </div>
-          <Sparkline data={incomeTrend} color="#10b981" gradientId="spark_income" />
+          {hasIncome && <Sparkline data={incomeTrend} color="#10b981" gradientId="spark_income" />}
         </div>
       </Card>
 
@@ -189,13 +215,19 @@ export const StatCards: React.FC<StatCardsProps> = ({
 
         <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-rose-600">
-              <TrendingDown className="w-3.5 h-3.5" />
-              <span>{spentPercent}%</span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium">rasio belanja</p>
+            {hasExpense ? (
+              <>
+                <div className="flex items-center gap-1 text-[11px] font-bold text-rose-600">
+                  <TrendingDown className="w-3.5 h-3.5" />
+                  <span>{spentPercent}% terpakai</span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">Rasio belanja</p>
+              </>
+            ) : (
+              <p className="text-[10px] text-slate-400 font-medium">Belum ada pengeluaran bulan ini</p>
+            )}
           </div>
-          <Sparkline data={expenseTrend} color="#f43f5e" gradientId="spark_expense" />
+          {hasExpense && <Sparkline data={expenseTrend} color="#f43f5e" gradientId="spark_expense" />}
         </div>
       </Card>
 
@@ -216,7 +248,7 @@ export const StatCards: React.FC<StatCardsProps> = ({
           </div>
         </div>
 
-        {/* Dynamic Progress Bar: Green -> Yellow -> Red */}
+        {/* Dynamic Progress Bar */}
         <div className="pt-3 mt-3 border-t border-slate-100 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
             <span>Terpakai {spentPercent}%</span>
@@ -226,7 +258,7 @@ export const StatCards: React.FC<StatCardsProps> = ({
           <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5">
             <div
               className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
-              style={{ width: `${Math.min(100, Math.max(5, spentPercent))}%` }}
+              style={{ width: `${actualBudget > 0 ? Math.min(100, Math.max(0, spentPercent)) : 0}%` }}
             />
           </div>
         </div>

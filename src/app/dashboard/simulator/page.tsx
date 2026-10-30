@@ -283,7 +283,7 @@ export default function BotSimulatorPage() {
 
         <div className="flex items-center gap-2">
           <Link
-            href="/admin"
+            href="/dashboard/admin"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold transition-colors"
           >
             <span>Panel Admin</span>

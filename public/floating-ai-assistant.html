@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tata AI - Modern Floating AI Assistant</title>
+  <!-- Tailwind CSS CDN for modern responsive design -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom animations & scrollbar styling */
+    .chat-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .chat-scroll::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .chat-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.1); }
+    }
+    .status-pulse {
+      animation: pulse-subtle 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-6 text-slate-800 font-sans">
+
+  <!-- Background demo showcase container -->
+  <div class="max-w-xl text-center space-y-4">
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-50 border border-brand-100 text-brand-700 text-xs font-bold">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      TataDana Assistant Showcase
+    </div>
+    <h1 class="text-3xl font-black text-slate-900 tracking-tight">Floating AI Assistant Chat Widget</h1>
+    <p class="text-sm text-slate-600 leading-relaxed">
+      Komponen panel chat floating AI yang modern, responsif, dilengkapi FAB di pojok kanan bawah, indikator online menyala, auto-scroll, typing indicator 3 titik, dan integrasi API siap pakai.
+    </p>
+    <div class="p-4 bg-white rounded-2xl border border-slate-200 text-xs text-slate-500 text-left space-y-1 shadow-sm">
+      <p class="font-bold text-slate-800">Petunjuk Penggunaan Widget:</p>
+      <p>1. Klik tombol chat floating di pojok kanan bawah untuk membuka panel chat.</p>
+      <p>2. Ketik transaksi seperti <code class="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold">cilok 2rb</code> atau pertanyaan keuangan, lalu tekan Enter.</p>
+      <p>3. Amati typing indicator animasi 3 titik dan bubble respon asisten AI.</p>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- FLOATING AI ASSISTANT COMPONENT (START)    -->
+  <!-- ========================================== -->
+
+  <!-- 1. Floating Action Button (FAB) -->
+  <button
+    id="aiFabBtn"
+    onclick="toggleAiChat()"
+    aria-label="Buka Tata AI Assistant"
+    class="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3.5 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-xs shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-300 ring-4 ring-sky-500/20 group"
+  >
+    <!-- Status online titik hijau berkedip/menyala -->
+    <span class="relative flex h-2.5 w-2.5">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+    </span>
+    
+    <span id="fabLabel" class="hidden sm:inline">Tata AI Assistant</span>
+
+    <!-- FAB Icon (Chat / Close) -->
+    <svg id="fabIconChat" class="w-4 h-4 transition-transform group-hover:rotate-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+    </svg>
+    <svg id="fabIconClose" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>
+    </svg>
+  </button>
+
+  <!-- 2. Chat Panel Container -->
+  <div
+    id="aiChatPanel"
+    class="fixed bottom-22 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[400px] h-[520px] max-h-[82vh] bg-white rounded-3xl shadow-2xl border border-slate-200/90 flex flex-col overflow-hidden hidden transition-all duration-300 transform opacity-0 translate-y-4"
+  >
+    <!-- Header -->
+    <div class="px-4 py-3.5 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex items-center justify-between border-b border-slate-800 shadow-sm">
+      <div class="flex items-center gap-2.5">
+        <div class="relative">
+          <div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-sm font-black text-sm">
+            🤖
+          </div>
+          <!-- Titik hijau berkedip di header -->
+          <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full status-pulse"></span>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h3 class="text-xs font-black tracking-tight text-white">Tata AI Assistant</h3>
+            <span class="px-1.5 py-0.2 rounded-full text-[9px] font-bold uppercase bg-sky-500/20 text-sky-300 border border-sky-500/30">
+              Online
+            </span>
+          </div>
+          <p class="text-[10px] text-emerald-400 font-medium">Asisten Finansial Pintar</p>
+        </div>
+      </div>
+
+      <!-- Close Button -->
+      <button
+        onclick="toggleAiChat()"
+        class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+        title="Tutup Panel"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Message Area (Body) -->
+    <div id="aiMessageArea" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/60 chat-scroll">
+      <!-- Bot Welcome Bubble -->
+      <div class="flex flex-col items-start">
+        <div class="max-w-[85%] p-3.5 rounded-2xl rounded-bl-xs bg-white border border-slate-200/90 text-slate-800 text-xs leading-relaxed shadow-xs">
+          Halo! 👋 Saya <strong>Tata AI</strong>. Ada yang bisa saya bantu catat hari ini? Ketik <em>"cilok 2rb"</em> atau <em>"cek saldo"</em> untuk mulai.
+        </div>
+        <span class="text-[9px] text-slate-400 mt-1 px-1 font-mono">Sekarang</span>
+      </div>
+    </div>
+
+    <!-- Typing Indicator (Hidden by default) -->
+    <div id="typingIndicator" class="px-4 py-2 bg-slate-50/60 hidden">
+      <div class="inline-flex items-center gap-1.5 p-2.5 bg-white border border-slate-200 rounded-2xl rounded-bl-xs shadow-xs">
+        <span class="w-2 h-2 rounded-full bg-sky-500 animate-bounce [animation-delay:-0.3s]"></span>
+        <span class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.15s]"></span>
+        <span class="w-2 h-2 rounded-full bg-blue-500 animate-bounce"></span>
+      </div>
+    </div>
+
+    <!-- Quick Suggestions Bar -->
+    <div class="px-3 py-1.5 bg-slate-100/80 border-t border-slate-200/80 flex items-center gap-1.5 overflow-x-auto text-[10px]">
+      <button onclick="sendQuickPrompt('cilok 2rb')" class="whitespace-nowrap px-2.5 py-1 bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-600 rounded-full border border-slate-200 transition-colors font-semibold">
+        🍜 cilok 2rb
+      </button>
+      <button onclick="sendQuickPrompt('kopi susu 15k')" class="whitespace-nowrap px-2.5 py-1 bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-600 rounded-full border border-slate-200 transition-colors font-semibold">
+        ☕ kopi 15k
+      </button>
+      <button onclick="sendQuickPrompt('Cek total saldo')" class="whitespace-nowrap px-2.5 py-1 bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-600 rounded-full border border-slate-200 transition-colors font-semibold">
+        💳 Cek Saldo
+      </button>
+    </div>
+
+    <!-- Footer / Input Area -->
+    <div class="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
+      <input
+        type="text"
+        id="aiChatInput"
+        placeholder="Ketik pesan atau transaksi..."
+        class="flex-1 bg-slate-50 text-slate-900 placeholder-slate-400 text-xs rounded-xl px-3.5 py-2.5 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 font-medium"
+        onkeydown="handleKeyDown(event)"
+      />
+      <button
+        id="aiSendBtn"
+        onclick="submitMessage()"
+        class="p-2.5 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white rounded-xl transition-all shadow-md shadow-sky-600/20 shrink-0"
+        title="Kirim (Enter)"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC & API INTEGRATION         -->
+  <!-- ========================================== -->
+  <script>
+    let isPanelOpen = false;
+    const aiChatPanel = document.getElementById('aiChatPanel');
+    const aiMessageArea = document.getElementById('aiMessageArea');
+    const aiChatInput = document.getElementById('aiChatInput');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const fabIconChat = document.getElementById('fabIconChat');
+    const fabIconClose = document.getElementById('fabIconClose');
+    const fabLabel = document.getElementById('fabLabel');
+
+    /**
+     * 1. Toggle Buka / Tutup Panel Chat
+     */
+    function toggleAiChat() {
+      isPanelOpen = !isPanelOpen;
+      if (isPanelOpen) {
+        aiChatPanel.classList.remove('hidden');
+        setTimeout(() => {
+          aiChatPanel.classList.remove('opacity-0', 'translate-y-4');
+        }, 10);
+        fabIconChat.classList.add('hidden');
+        fabIconClose.classList.remove('hidden');
+        if (fabLabel) fabLabel.textContent = 'Tutup AI';
+        aiChatInput.focus();
+        scrollToBottom();
+      } else {
+        aiChatPanel.classList.add('opacity-0', 'translate-y-4');
+        setTimeout(() => {
+          aiChatPanel.classList.add('hidden');
+        }, 300);
+        fabIconChat.classList.remove('hidden');
+        fabIconClose.classList.add('hidden');
+        if (fabLabel) fabLabel.textContent = 'Tata AI Assistant';
+      }
+    }
+
+    /**
+     * 2. Auto-scroll ke bawah saat ada pesan baru
+     */
+    function scrollToBottom() {
+      aiMessageArea.scrollTop = aiMessageArea.scrollHeight;
+    }
+
+    /**
+     * 3. Handle penekanan tombol Enter
+     */
+    function handleKeyDown(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitMessage();
+      }
+    }
+
+    /**
+     * 4. Quick Prompts click handler
+     */
+    function sendQuickPrompt(text) {
+      aiChatInput.value = text;
+      submitMessage();
+    }
+
+    /**
+     * 5. Append bubble chat ke dalam Message Area
+     */
+    function appendMessage(sender, text) {
+      const isUser = sender === 'user';
+      const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+      const msgWrapper = document.createElement('div');
+      msgWrapper.className = `flex flex-col ${isUser ? 'items-end' : 'items-start'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed shadow-xs ${
+        isUser
+          ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-br-xs'
+          : 'bg-white border border-slate-200/90 text-slate-800 rounded-bl-xs'
+      }`;
+      bubble.innerHTML = text.replace(/\n/g, '<br/>');
+
+      const timeEl = document.createElement('span');
+      timeEl.className = 'text-[9px] text-slate-400 mt-1 px-1 font-mono';
+      timeEl.textContent = timeStr;
+
+      msgWrapper.appendChild(bubble);
+      msgWrapper.appendChild(timeEl);
+      aiMessageArea.appendChild(msgWrapper);
+
+      scrollToBottom();
+    }
+
+    /**
+     * 6. Submit Message & Asynchronous API Call
+     */
+    async function submitMessage() {
+      const text = aiChatInput.value.trim();
+      if (!text) return;
+
+      // Render bubble pengguna
+      appendMessage('user', text);
+      aiChatInput.value = '';
+
+      // Tampilkan indikator loading (typing 3 titik)
+      typingIndicator.classList.remove('hidden');
+      scrollToBottom();
+
+      try {
+        /* 
+         * ========================================================
+         * CONTOH INTEGRASI BACKEND ASYNC FETCH (POST REQUEST)
+         * ========================================================
+         * Ganti URL di bawah dengan endpoint AI Anda (misal: /api/chat):
+         * 
+         * const response = await fetch('/api/chat', {
+         *   method: 'POST',
+         *   headers: { 'Content-Type': 'application/json' },
+         *   body: JSON.stringify({ message: text, user_id: 'usr_123' })
+         * });
+         * const data = await response.json();
+         * const reply = data.reply;
+         * ========================================================
+         */
+
+        // Simulasi respon asinkron cerdas:
+        await new Promise((res) => setTimeout(res, 800));
+
+        let botReply = '';
+        const lower = text.toLowerCase();
+
+        if (lower.includes('cilok') || lower.includes('kopi') || lower.includes('rb') || lower.includes('k')) {
+          botReply = `Siap, pesanan <strong>${text}</strong> sudah dicatat ke sistem!\n\nPilihan metode:\n1. Saldo TataDana\n2. QRIS\n3. Transfer Bank\n4. Tunai / Catat Manual`;
+        } else if (lower.includes('saldo')) {
+          botReply = `Total saldo aktifmu saat ini adalah <strong>Rp 1.500.000</strong>. Semua dompet dalam status sehat!`;
+        } else {
+          botReply = `Pesan Anda: "<em>${text}</em>" telah diterima oleh Tata AI Assistant. Ketik nominal untuk mencatat transaksi keuangan secara langsung.`;
+        }
+
+        // Sembunyikan typing indicator & append pesan bot
+        typingIndicator.classList.add('hidden');
+        appendMessage('bot', botReply);
+      } catch (err) {
+        typingIndicator.classList.add('hidden');
+        appendMessage('bot', 'Maaf, terjadi kendala jaringan saat menghubungi asisten AI.');
+        console.error('API Error:', err);
+      }
+    }
+  </script>
+  <!-- ========================================== -->
+  <!-- FLOATING AI ASSISTANT COMPONENT (END)      -->
+  <!-- ========================================== -->
+
+</body>
+</html>

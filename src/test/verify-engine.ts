@@ -17,6 +17,14 @@ import {
 } from '../lib/telegram/formatter';
 import { formatWIBDateTime, getCurrentMonthPeriodWIB, getTodayWIB } from '../lib/utils/date-wib';
 import { serverStore } from '../lib/supabase/server';
+import { 
+  getAdminApprovalWaUrl, 
+  getAdminUpgradeProWaUrl, 
+  getAdminRegisterWaUrl,
+  getAdminWaNumber, 
+  normalizeWaNumber 
+} from '../lib/utils/whatsapp';
+import { sanitizeUserDisplayName, sanitizeUserId } from '../lib/auth/user-sanitize';
 
 export interface TestResult {
   name: string;
@@ -186,6 +194,98 @@ export function runTataDanaVerificationSuite(): { results: TestResult[]; summary
     spent: 25000,
   };
   assert('Budget: supports daily period_type', testBudget.period_type === 'daily', testBudget.period_type, 'daily');
+
+  // 13. Admin Approval & WhatsApp Link Assertions
+  const waNorm = normalizeWaNumber('087730370324');
+  assert('WhatsApp: normalize 087730370324 -> 6287730370324', waNorm === '6287730370324', waNorm, '6287730370324');
+
+  const approvalUrl = getAdminApprovalWaUrl({
+    fullName: 'Ahmad Fauzi',
+    email: 'ahmad.fauzi@example.com',
+  });
+  assert(
+    'Admin Approval: generates valid WhatsApp approval link with name and email',
+    approvalUrl.includes('https://wa.me/') &&
+      approvalUrl.includes('Ahmad%20Fauzi') &&
+      approvalUrl.includes('ahmad.fauzi%40example.com'),
+    true,
+    true
+  );
+
+  // 14. Registration defaults to pending status
+  const regUser = serverStore.registerNewUser({
+    fullName: 'Test Pending User',
+    phone: '089912345678',
+    email: 'test.pending@example.com',
+    password: 'Password123!',
+  });
+  assert('Registration: status is pending for regular user', regUser.verification_status === 'pending', regUser.verification_status, 'pending');
+
+  // 15. Dynamic User WhatsApp Pro Upgrade Draft Assertions
+  const proUrlReal = getAdminUpgradeProWaUrl({
+    fullName: 'Revi',
+    email: 'revikerudung99@gmail.com',
+    userId: 'usr_1793200176636',
+  });
+  assert(
+    'Pro WhatsApp: Real user details rendered dynamically',
+    proUrlReal.includes('6287730370324') &&
+      proUrlReal.includes('Revi') &&
+      proUrlReal.includes('revikerudung99%40gmail.com') &&
+      proUrlReal.includes('usr_1793200176636') &&
+      proUrlReal.includes('TataDana%20Pro%20Bulanan'),
+    true,
+    true
+  );
+
+  const proUrlFallback = getAdminUpgradeProWaUrl({
+    fullName: 'Vina Al Fitriansyah', // dummy name to be rejected
+    email: 'budi.santoso@gmail.com',
+    userId: 'usr_demo_123', // dummy id to be rejected
+  });
+  assert(
+    'Pro WhatsApp: Rejects dummy name & dummy ID, safely fallbacks to email identity',
+    !proUrlFallback.includes('Vina') &&
+      !proUrlFallback.includes('usr_demo_123') &&
+      proUrlFallback.includes('Budi.santoso') &&
+      proUrlFallback.includes('budi.santoso%40gmail.com'),
+    true,
+    true
+  );
+
+  const safeName = sanitizeUserDisplayName('', 'user.test@example.com');
+  assert('Auth: sanitizeUserDisplayName derives name from email', safeName === 'User.test', safeName, 'User.test');
+
+  const safeId = sanitizeUserId('usr_demo_123', 'user.test@example.com');
+  assert('Auth: sanitizeUserId rejects dummy usr_demo_123', safeId === 'user.test@example.com', safeId, 'user.test@example.com');
+
+  // 16. WhatsApp First-Time Registration & Onboarding Draft Assertions
+  const regWaEmpty = getAdminRegisterWaUrl();
+  assert(
+    'Registration WhatsApp: Uses intuitive placeholders when form is empty',
+    regWaEmpty.includes('6287730370324') &&
+      regWaEmpty.includes('%5BTulis%20nama%20Anda%5D') &&
+      regWaEmpty.includes('%5BTulis%20email%20Anda%5D') &&
+      regWaEmpty.includes('Halo%20Admin%20TataDana%2C%20saya%20tertarik') &&
+      regWaEmpty.includes('cara%20aktivasi%20akun%20pertama%20saya'),
+    true,
+    true
+  );
+
+  const regWaFilled = getAdminRegisterWaUrl({
+    fullName: 'Bambang Sudirman',
+    email: 'bambang.s@gmail.com',
+    phone: '081298765432',
+  });
+  assert(
+    'Registration WhatsApp: Automatically inserts user form inputs',
+    regWaFilled.includes('6287730370324') &&
+      regWaFilled.includes('Bambang%20Sudirman') &&
+      regWaFilled.includes('bambang.s%40gmail.com') &&
+      regWaFilled.includes('081298765432'),
+    true,
+    true
+  );
 
   const total = results.length;
   const passed = results.filter((r) => r.passed).length;

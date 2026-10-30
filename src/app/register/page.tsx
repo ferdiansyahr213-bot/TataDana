@@ -5,7 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Smartphone, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Smartphone, Mail, Lock, User, UserPlus, AlertCircle, ArrowRight, MessageCircle } from 'lucide-react';
+import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
+import { supabase } from '@/lib/supabase/client';
+import { getAdminRegisterWaUrl, getAdminWaDisplayNumber } from '@/lib/utils/whatsapp';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -14,25 +17,96 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleRegister = (e: React.FormEvent) => {
+  // State to hold registered user data when waiting for approval
+  const [pendingUser, setPendingUser] = useState<{
+    id: string;
+    fullName: string;
+    email: string;
+    phone: string;
+  } | null>(null);
+
+  // Dynamic WhatsApp registration link reflecting current form inputs
+  const waRegisterUrl = getAdminRegisterWaUrl({
+    fullName: fullName.trim() || undefined,
+    email: email.trim() || undefined,
+    phone: phone.trim() || undefined,
+  });
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMessage(null);
 
-    // Save temporary registration data to session storage
-    sessionStorage.setItem(
-      'new_user_reg',
-      JSON.stringify({
-        fullName,
-        phone,
-        email,
-      })
-    );
+    const cleanName = fullName.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
 
-    setTimeout(() => {
+    try {
+      // 1. Simpan nama lengkap, email, dan nomor HP ke tabel user_approvals menggunakan Supabase client
+      let approvalId = `appr_${Date.now()}`;
+      try {
+        const { data: insertedApproval, error: supabaseError } = await supabase
+          .from('user_approvals')
+          .insert([
+            {
+              full_name: cleanName,
+              email: cleanEmail,
+              phone_number: cleanPhone,
+              status: 'pending',
+            },
+          ])
+          .select()
+          .maybeSingle();
+
+        if (insertedApproval?.id) {
+          approvalId = insertedApproval.id;
+        }
+
+        if (supabaseError) {
+          console.warn('Supabase client insert to user_approvals notice:', supabaseError.message);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase direct insert handled:', sbErr);
+      }
+
+      // 2. Sinkronkan pembuatan akun dengan status pending ke backend
+      try {
+        const res = await fetch('/api/data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register_user',
+            payload: {
+              fullName: cleanName,
+              phone: cleanPhone,
+              email: cleanEmail,
+              password: password,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (data.ok && data.user?.id) {
+          approvalId = data.user.id;
+        }
+      } catch (syncErr) {
+        console.warn('Backend sync notice:', syncErr);
+      }
+
       setIsLoading(false);
-      router.push(`/verify-otp?phone=${encodeURIComponent(phone)}`);
-    }, 600);
+
+      // 3. Arahkan pengguna ke tampilan menunggu persetujuan yang berisi tautan WhatsApp ke admin
+      setPendingUser({
+        id: approvalId,
+        fullName: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+      });
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMessage(err.message || 'Gagal menyimpan pendaftaran.');
+    }
   };
 
   return (
@@ -59,12 +133,12 @@ export default function RegisterPage() {
             Keuanganmu. <br />Terkontrol.
           </h2>
           <p className="text-blue-100 text-sm leading-relaxed max-w-sm">
-            Setelah registrasi, bot Telegram TataDana langsung siap mencatat transaksi harianmu dengan rekomendasi AI cerdas.
+            Setelah pendaftaran diajukan, akun Anda akan diverifikasi oleh Admin. Nikmati pencatatan cerdas terintegrasi Telegram dan AI asisten.
           </p>
         </div>
 
         <div className="relative z-10 text-xs text-blue-200/80">
-          © 2026 TataDana Fintech • Setup Akun Instan
+          © 2026 TataDana Fintech • Sistem Persetujuan Admin Manual
         </div>
       </div>
 
@@ -76,14 +150,21 @@ export default function RegisterPage() {
               Buat Akun TataDana
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Daftar gratis dan nikmati pencatatan keuangan termudah langsung dari Telegram
+              Daftar gratis untuk mulai mencatat keuangan terintegrasi bot Telegram
             </p>
           </div>
+
+          {errorMessage && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           <form onSubmit={handleRegister} className="space-y-4 text-xs">
             <Input
               label="Nama Lengkap"
-              placeholder="contoh: Vina Al Fitriansyah"
+              placeholder="contoh: Budi Santoso"
               leftIcon={<User className="w-4 h-4" />}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -91,14 +172,14 @@ export default function RegisterPage() {
             />
 
             <Input
-              label="Nomor Handphone (Wajib Verifikasi OTP)"
+              label="Nomor Handphone (WhatsApp)"
               type="tel"
-              placeholder="087757524542"
+              placeholder="contoh: 081234567890"
               leftIcon={<Smartphone className="w-4 h-4" />}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
-              helperText="Kunci utama untuk menghubungkan akun kamu ke Telegram bot."
+              helperText="Digunakan untuk konfirmasi persetujuan admin & integrasi Telegram."
             />
 
             <Input
@@ -122,10 +203,33 @@ export default function RegisterPage() {
             />
 
             <Button type="submit" variant="primary" className="w-full mt-2" isLoading={isLoading}>
-              <span>Lanjut ke Verifikasi OTP</span>
-              <ArrowRight className="w-4 h-4 ml-1" />
+              <span>Lanjut / Daftar Akun TataDana</span>
+              <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </form>
+
+          {/* Opsi Pendaftaran / Kontak Langsung via WhatsApp Admin */}
+          <div className="space-y-3 pt-1">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200" />
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
+                <span className="bg-white px-3 text-slate-400 font-bold">Atau Registrasi Langsung</span>
+              </div>
+            </div>
+
+            <a
+              href={waRegisterUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all transform hover:-translate-y-0.5"
+              title="Hubungi Admin untuk pendaftaran & aktivasi instan akun TataDana"
+            >
+              <MessageCircle className="w-4 h-4 fill-current" />
+              <span>Daftar Manual via WhatsApp Admin</span>
+            </a>
+          </div>
 
           <p className="text-center text-xs text-slate-500">
             Sudah memiliki akun?{' '}
@@ -135,6 +239,20 @@ export default function RegisterPage() {
           </p>
         </div>
       </div>
+
+      {/* Modal Menunggu Persetujuan Admin setelah pendaftaran */}
+      {pendingUser && (
+        <PendingVerificationModal
+          fullName={pendingUser.fullName}
+          email={pendingUser.email}
+          phone={pendingUser.phone}
+          userId={pendingUser.id}
+          onClose={() => setPendingUser(null)}
+          onVerified={() => {
+            router.push('/dashboard');
+          }}
+        />
+      )}
     </div>
   );
 }

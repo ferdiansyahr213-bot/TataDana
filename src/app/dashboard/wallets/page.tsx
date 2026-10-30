@@ -53,6 +53,7 @@ const WALLET_PRESETS: WalletPreset[] = [
 export default function WalletsPage() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [limitWarning, setLimitWarning] = useState<string | null>(null);
@@ -69,15 +70,105 @@ export default function WalletsPage() {
   const [destWalletId, setDestWalletId] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
 
-  const loadData = async () => {
-    try {
-      const paramId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('impersonate') || new URLSearchParams(window.location.search).get('userId') || sessionStorage.getItem('current_user_id') : null;
-      const activeUser = await getCurrentUserProfile(paramId);
-      setUser(activeUser);
+  // Open Finance (Brick) Bank Connection State
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [bankInstitution, setBankInstitution] = useState('bca');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankAccountHolder, setBankAccountHolder] = useState('');
+  const [bankInitialBalance, setBankInitialBalance] = useState('');
+  const [isConnectingBank, setIsConnectingBank] = useState(false);
+  const [bankSuccessMsg, setBankSuccessMsg] = useState<string | null>(null);
 
-      // Fetch tabel wallets Supabase berdasarkan user_id
-      const userWallets = await fetchUserWallets(activeUser.id);
+  const handleOpenBankConnect = () => {
+    setBankAccountHolder(user?.full_name || 'Budi Santoso');
+    setBankAccountNumber('');
+    setBankInitialBalance('5000000');
+    setBankSuccessMsg(null);
+    setIsBankModalOpen(true);
+  };
+
+  const handleConnectBankSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsConnectingBank(true);
+
+    const bankNames: Record<string, string> = {
+      bca: 'Bank Central Asia (BCA)',
+      mandiri: 'Bank Mandiri',
+      bni: 'Bank Negara Indonesia (BNI)',
+      bri: 'Bank Rakyat Indonesia (BRI)',
+      cimb: 'CIMB Niaga',
+      bsi: 'Bank Syariah Indonesia (BSI)',
+      jago: 'Bank Jago',
+    };
+
+    const instName = bankNames[bankInstitution] || 'Rekening Bank';
+    const num = parseFloat(bankInitialBalance) || 0;
+
+    try {
+      const res = await fetch('/api/finance/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_connected_bank',
+          userId: user?.id,
+          connectData: {
+            institutionId: bankInstitution,
+            institutionName: instName,
+            accountNumber: bankAccountNumber || '1234567890',
+            accountHolderName: bankAccountHolder || user?.full_name || 'Budi Santoso',
+            initialBalance: num,
+            rawAccessToken: `brick_tok_${Date.now()}`,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        setBankSuccessMsg(`Rekening ${instName} berhasil dihubungkan via Open Finance!`);
+        setTimeout(() => {
+          setIsBankModalOpen(false);
+          setIsConnectingBank(false);
+          loadData();
+        }, 1200);
+      } else {
+        alert(data.error || 'Gagal menghubungkan rekening bank.');
+        setIsConnectingBank(false);
+      }
+    } catch (e: any) {
+      alert('Terjadi kesalahan koneksi.');
+      setIsConnectingBank(false);
+    }
+  };
+
+  const loadData = async (silent = false) => {
+    if (!silent && wallets.length === 0) {
+      setIsLoading(true);
+    }
+    try {
+      const paramId = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('impersonate') ||
+          new URLSearchParams(window.location.search).get('userId') ||
+          sessionStorage.getItem('current_user_id')
+        : null;
+      const targetUserId = paramId || 'usr_demo_123';
+
+      // Eksekusi paralel (Promise.all) agar profil user dan dompet termuat bersamaan tanpa blocking
+      const [activeUser, userWallets] = await Promise.all([
+        getCurrentUserProfile(targetUserId),
+        fetchUserWallets(targetUserId),
+      ]);
+
+      setUser(activeUser);
       setWallets(userWallets);
+
+      // Simpan ke Client-Side Cache (SWR Pattern) untuk navigasi instan 0ms
+      if (typeof window !== 'undefined' && userWallets.length > 0) {
+        try {
+          sessionStorage.setItem(`tatadana_wallets_cache_${targetUserId}`, JSON.stringify(userWallets));
+        } catch (err) {
+          // sessionStorage quota safe
+        }
+      }
 
       if (userWallets.length >= 2 && !sourceWalletId) {
         setSourceWalletId(userWallets[0].id);
@@ -85,18 +176,41 @@ export default function WalletsPage() {
       }
     } catch (e) {
       console.error('loadData wallets error:', e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-
-    // Realtime subscription agar mutasi transaksi langsung mengupdate dompet
-    const paramId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('impersonate') || new URLSearchParams(window.location.search).get('userId') || sessionStorage.getItem('current_user_id') : null;
+    const paramId = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('impersonate') ||
+        new URLSearchParams(window.location.search).get('userId') ||
+        sessionStorage.getItem('current_user_id')
+      : null;
     const targetUserId = paramId || 'usr_demo_123';
 
+    // 1. Cek Client-Side Cache seketika saat halaman dibuka (0ms instant render)
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedStr = sessionStorage.getItem(`tatadana_wallets_cache_${targetUserId}`);
+        if (cachedStr) {
+          const cachedWallets = JSON.parse(cachedStr);
+          if (Array.isArray(cachedWallets) && cachedWallets.length > 0) {
+            setWallets(cachedWallets);
+            setIsLoading(false);
+          }
+        }
+      } catch (e) {
+        // cache fallback
+      }
+    }
+
+    // 2. Muat data segar secara paralel di background (stale-while-revalidate)
+    loadData(wallets.length > 0);
+
+    // 3. Realtime subscription aman (hanya jika live supabase aktif)
     const unsubscribe = subscribeToTransactions(targetUserId, () => {
-      loadData();
+      loadData(true);
     });
 
     return () => {
@@ -257,15 +371,28 @@ export default function WalletsPage() {
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Total Kekayaan Bersih
           </span>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1">
-            {formatRupiah(totalBalance)}
-          </div>
+          {isLoading && wallets.length === 0 ? (
+            <div className="h-8 w-44 bg-slate-200 animate-pulse rounded-lg mt-1" />
+          ) : (
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1">
+              {formatRupiah(totalBalance)}
+            </div>
+          )}
           <p className="text-xs text-slate-400 mt-0.5">
-            Tersebar di {wallets.length} dompet aktif • Mata uang IDR (Rupiah)
+            {isLoading && wallets.length === 0 ? 'Memuat dompet...' : `Tersebar di ${wallets.length} dompet aktif • Mata uang IDR (Rupiah)`}
           </p>
         </div>
 
-        <div className="flex gap-2.5">
+        <div className="flex flex-wrap gap-2.5">
+          <Button
+            onClick={handleOpenBankConnect}
+            variant="outline"
+            size="sm"
+            className="border-blue-200 text-brand-700 bg-blue-50/50 hover:bg-blue-100/50"
+            leftIcon={<Landmark className="w-4 h-4 text-brand-600" />}
+          >
+            Hubungkan Bank (Open Finance)
+          </Button>
           <Button
             onClick={() => setIsTransferModalOpen(true)}
             variant="outline"
@@ -285,120 +412,166 @@ export default function WalletsPage() {
         </div>
       </div>
 
-      {/* Wallets Cards Grid - Fintech Premium Card Style */}
+      {/* Wallets Cards Grid - Fintech Premium Card Style with Instant Skeleton Loading */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {wallets
-          .filter((w) => w.id !== 'wal_01')
-          .filter((w, index, self) => index === self.findIndex((t) => t.id === w.id))
-          .map((wallet) => {
-            const isBank = wallet.type === 'bank';
-            const isEwallet = wallet.type === 'ewallet';
-            const cardBg = wallet.color || (isBank ? '#003882' : isEwallet ? '#0284c7' : '#059669');
-
-            return (
-              <div
-                key={wallet.id}
-                className={`relative rounded-3xl p-6 text-white overflow-hidden shadow-lg transition-transform hover:-translate-y-1 ${
-                  wallet.is_default ? 'ring-4 ring-brand-500/30' : ''
-                }`}
-                style={{
-                  background: `linear-gradient(135deg, ${cardBg} 0%, #0f172a 120%)`,
-                }}
-              >
-                {/* Background watermark icon */}
-                <div className="absolute -right-6 -bottom-6 opacity-10 pointer-events-none">
-                  {isBank ? (
-                    <Landmark className="w-40 h-40" />
-                  ) : isEwallet ? (
-                    <Smartphone className="w-40 h-40" />
-                  ) : (
-                    <Banknote className="w-40 h-40" />
-                  )}
+        {isLoading && wallets.length === 0 ? (
+          // Skeleton Loading Cards (Instant feedback, no blank screen)
+          Array.from({ length: 3 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="relative rounded-3xl p-6 bg-slate-900 text-white overflow-hidden shadow-lg border border-slate-800 animate-pulse"
+            >
+              {/* Top Row Skeleton */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-7 rounded-md bg-slate-700/80" />
+                  <div className="w-14 h-4 rounded bg-slate-700/60" />
                 </div>
+                <div className="w-24 h-6 rounded-full bg-slate-800" />
+              </div>
 
-                {/* Top Row: Chip, Badge & Delete Action */}
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-7 rounded-md bg-amber-400/90 border border-amber-300 flex items-center justify-center shadow-inner">
-                      <div className="w-5 h-4 border-t border-b border-amber-600/40" />
-                    </div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
-                      {wallet.type}
-                    </span>
+              {/* Title Skeleton */}
+              <div className="space-y-2 mb-6">
+                <div className="w-36 h-5 rounded bg-slate-700/80" />
+                <div className="w-24 h-3.5 rounded bg-slate-800" />
+              </div>
+
+              {/* Saldo Skeleton */}
+              <div className="my-4 space-y-1.5">
+                <div className="w-20 h-3 rounded bg-slate-800" />
+                <div className="w-44 h-8 rounded bg-slate-700/80" />
+              </div>
+
+              {/* Action Footer Skeleton */}
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+                <div className="w-28 h-4 rounded bg-slate-800" />
+                <div className="w-20 h-6 rounded bg-slate-800" />
+              </div>
+            </div>
+          ))
+        ) : wallets.length === 0 ? (
+          <div className="col-span-full py-12 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50">
+            <WalletIcon className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-700">Belum ada dompet terdaftar</p>
+            <p className="text-xs text-slate-400 mt-1">Tambahkan dompet pertama Anda untuk mulai mengelola keuangan.</p>
+            <Button onClick={handleOpenAdd} variant="primary" size="sm" className="mt-4" leftIcon={<PlusCircle className="w-4 h-4" />}>
+              Tambah Dompet
+            </Button>
+          </div>
+        ) : (
+          wallets
+            .filter((w) => w.id !== 'wal_01')
+            .filter((w, index, self) => index === self.findIndex((t) => t.id === w.id))
+            .map((wallet) => {
+              const isBank = wallet.type === 'bank';
+              const isEwallet = wallet.type === 'ewallet';
+              const cardBg = wallet.color || (isBank ? '#003882' : isEwallet ? '#0284c7' : '#059669');
+
+              return (
+                <div
+                  key={wallet.id}
+                  className={`relative rounded-3xl p-6 text-white overflow-hidden shadow-lg transition-transform hover:-translate-y-1 ${
+                    wallet.is_default ? 'ring-4 ring-brand-500/30' : ''
+                  }`}
+                  style={{
+                    background: `linear-gradient(135deg, ${cardBg} 0%, #0f172a 120%)`,
+                  }}
+                >
+                  {/* Background watermark icon */}
+                  <div className="absolute -right-6 -bottom-6 opacity-10 pointer-events-none">
+                    {isBank ? (
+                      <Landmark className="w-40 h-40" />
+                    ) : isEwallet ? (
+                      <Smartphone className="w-40 h-40" />
+                    ) : (
+                      <Banknote className="w-40 h-40" />
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {wallet.is_default ? (
-                      <div className="bg-brand-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                        <Star className="w-3 h-3 fill-current" />
-                        <span>Default Telegram</span>
+                  {/* Top Row: Chip, Badge & Delete Action */}
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                      <div className="w-9 h-7 rounded-md bg-amber-400/90 border border-amber-300 flex items-center justify-center shadow-inner">
+                        <div className="w-5 h-4 border-t border-b border-amber-600/40" />
                       </div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+                        {wallet.type}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {wallet.is_default ? (
+                        <div className="bg-brand-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                          <Star className="w-3 h-3 fill-current" />
+                          <span>Default Telegram</span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] font-mono text-white/60">ID: {wallet.id.slice(0, 6)}</span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteWallet(wallet.id, wallet.name, wallet.is_default)}
+                        className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600/90 text-white/70 hover:text-white transition-all shadow-xs"
+                        title="Hapus Dompet"
+                        aria-label="Hapus Dompet"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Wallet Name & Type */}
+                  <div className="mb-4">
+                    <h3 className="font-extrabold text-lg text-white tracking-wide truncate">
+                      {wallet.name}
+                    </h3>
+                    <p className="text-xs text-white/70 capitalize mt-0.5">
+                      {wallet.type === 'bank' ? 'Rekening Bank' : wallet.type === 'ewallet' ? 'Dompet Digital' : 'Uang Tunai'}
+                    </p>
+                  </div>
+
+                  {/* Saldo Display */}
+                  <div className="my-4">
+                    <span className="text-[11px] font-medium text-white/60 uppercase tracking-wider">
+                      Saldo Tersedia
+                    </span>
+                    <div className="text-2xl font-black text-white tracking-tight mt-0.5">
+                      {formatRupiah(wallet.balance)}
+                    </div>
+                  </div>
+
+                  {/* Action Footer */}
+                  <div className="pt-4 border-t border-white/10 flex items-center justify-between text-xs">
+                    {wallet.is_default ? (
+                      <span className="text-brand-300 font-semibold flex items-center gap-1 text-[11px]">
+                        <Check className="w-4 h-4" /> Otomatis Dipakai Bot
+                      </span>
                     ) : (
-                      <span className="text-[11px] font-mono text-white/60">ID: {wallet.id.slice(0, 6)}</span>
+                      <button
+                        onClick={() => handleSetDefault(wallet.id)}
+                        className="text-white/80 hover:text-white font-medium transition-colors text-[11px] underline underline-offset-4"
+                      >
+                        Jadikan Default Bot
+                      </button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteWallet(wallet.id, wallet.name, wallet.is_default)}
-                      className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600/90 text-white/70 hover:text-white transition-all shadow-xs"
-                      title="Hapus Dompet"
-                      aria-label="Hapus Dompet"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSourceWalletId(wallet.id);
+                          setIsTransferModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-[11px] transition-colors"
+                      >
+                        Transfer Dana
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                {/* Wallet Name & Type */}
-                <div className="mb-4">
-                  <h3 className="font-extrabold text-lg text-white tracking-wide truncate">
-                    {wallet.name}
-                  </h3>
-                  <p className="text-xs text-white/70 capitalize mt-0.5">
-                    {wallet.type === 'bank' ? 'Rekening Bank' : wallet.type === 'ewallet' ? 'Dompet Digital' : 'Uang Tunai'}
-                  </p>
-                </div>
-
-                {/* Saldo Display */}
-                <div className="my-4">
-                  <span className="text-[11px] font-medium text-white/60 uppercase tracking-wider">
-                    Saldo Tersedia
-                  </span>
-                  <div className="text-2xl font-black text-white tracking-tight mt-0.5">
-                    {formatRupiah(wallet.balance)}
-                  </div>
-                </div>
-
-                {/* Action Footer */}
-                <div className="pt-4 border-t border-white/10 flex items-center justify-between text-xs">
-                  {wallet.is_default ? (
-                    <span className="text-brand-300 font-semibold flex items-center gap-1 text-[11px]">
-                      <Check className="w-4 h-4" /> Otomatis Dipakai Bot
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleSetDefault(wallet.id)}
-                      className="text-white/80 hover:text-white font-medium transition-colors text-[11px] underline underline-offset-4"
-                    >
-                      Jadikan Default Bot
-                    </button>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSourceWalletId(wallet.id);
-                        setIsTransferModalOpen(true);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-[11px] transition-colors"
-                    >
-                      Transfer Dana
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+        )}
       </div>
 
       {/* Add Wallet Modal with Indonesian Bank & E-Wallet Presets */}
@@ -566,6 +739,80 @@ export default function WalletsPage() {
             </Button>
             <Button type="submit" variant="primary" size="sm">
               Lakukan Transfer
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Open Finance Bank Connect Modal */}
+      <Modal
+        isOpen={isBankModalOpen}
+        onClose={() => setIsBankModalOpen(false)}
+        title="Hubungkan Rekening Bank (Open Finance)"
+        description="Sinkronisasi saldo dan mutasi otomatis terenkripsi AES-256-GCM via Brick API"
+      >
+        <form onSubmit={handleConnectBankSubmit} className="space-y-4 text-xs">
+          {bankSuccessMsg && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{bankSuccessMsg}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              Pilih Institusi Perbankan
+            </label>
+            <select
+              value={bankInstitution}
+              onChange={(e) => setBankInstitution(e.target.value)}
+              className="w-full rounded-xl border border-surface-border bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-brand-500"
+            >
+              <option value="bca">Bank Central Asia (BCA)</option>
+              <option value="mandiri">Bank Mandiri</option>
+              <option value="bni">Bank Negara Indonesia (BNI)</option>
+              <option value="bri">Bank Rakyat Indonesia (BRI)</option>
+              <option value="bsi">Bank Syariah Indonesia (BSI)</option>
+              <option value="cimb">CIMB Niaga</option>
+              <option value="jago">Bank Jago</option>
+            </select>
+          </div>
+
+          <Input
+            label="Nomor Rekening"
+            placeholder="contoh: 8271928391"
+            value={bankAccountNumber}
+            onChange={(e) => setBankAccountNumber(e.target.value)}
+            required
+          />
+
+          <Input
+            label="Nama Pemilik Rekening"
+            placeholder="contoh: Budi Santoso"
+            value={bankAccountHolder}
+            onChange={(e) => setBankAccountHolder(e.target.value)}
+            required
+          />
+
+          <Input
+            label="Saldo Terkini (Rp)"
+            type="number"
+            placeholder="contoh: 15000000"
+            value={bankInitialBalance}
+            onChange={(e) => setBankInitialBalance(e.target.value)}
+            required
+          />
+
+          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-[11px] text-brand-800 leading-relaxed">
+            🛡️ <strong>Keamanan Terjamin:</strong> Kredensial dan token akses bank dienkripsi menggunakan standar perbankan AES-256-GCM. Mutasi rekening akan disinkronkan secara berkala.
+          </div>
+
+          <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsBankModalOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit" variant="primary" size="sm" isLoading={isConnectingBank}>
+              Hubungkan Sekarang
             </Button>
           </div>
         </form>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serverStore } from '@/lib/supabase/server';
 import { getCurrentMonthPeriodWIB } from '@/lib/utils/date-wib';
+import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase/client';
 import type { Category } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     aiProviders: serverStore.aiProviders,
     aiSettings: serverStore.aiSettings,
     payments: serverStore.payments,
+    allUsers: Array.from(serverStore.users.values()),
   });
 }
 
@@ -31,8 +33,43 @@ export async function POST(req: NextRequest) {
     const user = serverStore.users.get(effectiveUserId);
 
     if (action === 'register_user') {
-      const newUser = serverStore.registerNewUser(payload);
-      return NextResponse.json({ ok: true, user: newUser });
+      const { fullName, phone, email, password } = payload || {};
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+
+      if (!cleanEmail || !password || !fullName) {
+        return NextResponse.json({ ok: false, error: 'Semua kolom pendaftaran wajib diisi' }, { status: 400 });
+      }
+
+      // Check if user already exists
+      const existingUser = serverStore.getUserByEmail(cleanEmail) || (cleanPhone ? serverStore.getUserByPhone(cleanPhone) : undefined);
+      if (existingUser) {
+        if (existingUser.verification_status === 'verified') {
+          return NextResponse.json({ ok: false, error: 'Email atau nomor telepon ini sudah terdaftar. Silakan masuk.' }, { status: 400 });
+        }
+        // If already exists but pending, return user info for approval
+        return NextResponse.json({
+          ok: true,
+          status: 'pending',
+          message: 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.',
+          user: existingUser,
+        });
+      }
+
+      // Create new user with status 'pending'
+      const newUser = serverStore.registerNewUser({
+        fullName,
+        phone,
+        email: cleanEmail,
+        password,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        status: 'pending',
+        message: 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.',
+        user: newUser,
+      });
     }
 
     if (!user) {
@@ -40,8 +77,76 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'create_transaction') {
+      const { wallet_id, amount, type = 'expense' } = payload || {};
+
+      // 1. Validasi Ketat: Hilangkan fallback default dompet sepihak
+      if (!wallet_id || typeof wallet_id !== 'string' || wallet_id.trim() === '') {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'wallet_id wajib disertakan. Transaksi ditolak untuk mencegah pemotongan dompet default secara sembarangan.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!amount || typeof amount !== 'number' || amount <= 0) {
+        return NextResponse.json(
+          { ok: false, error: 'Nominal transaksi (amount) tidak valid' },
+          { status: 400 }
+        );
+      }
+
+      // 2. Verifikasi kepemilikan dompet pengguna
+      const userWallets = serverStore.getWallets(effectiveUserId);
+      const targetWallet = userWallets.find((w) => w.id === wallet_id);
+
+      if (!targetWallet && !isLiveSupabaseConfigured()) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Dompet dengan ID '${wallet_id}' tidak ditemukan pada akun Anda. Pemotongan saldo dibatalkan.`,
+          },
+          { status: 404 }
+        );
+      }
+
+      // 3. Jika live Supabase aktif, jalankan query UPDATE spesifik pada wallet_id tersebut
+      if (isLiveSupabaseConfigured()) {
+        try {
+          const { data: w } = await supabase
+            .from('wallets')
+            .select('balance')
+            .eq('id', wallet_id)
+            .eq('user_id', effectiveUserId)
+            .single();
+
+          if (w) {
+            const newBalance = type === 'income' ? w.balance + amount : w.balance - amount;
+            await supabase
+              .from('wallets')
+              .update({ balance: newBalance, updated_at: new Date().toISOString() })
+              .eq('id', wallet_id)
+              .eq('user_id', effectiveUserId);
+          } else if (!targetWallet) {
+            return NextResponse.json(
+              {
+                ok: false,
+                error: `Dompet dengan ID '${wallet_id}' tidak ditemukan di database Supabase.`,
+              },
+              { status: 404 }
+            );
+          }
+        } catch (dbErr) {
+          console.warn('[API Data] Supabase balance update notice:', dbErr);
+        }
+      }
+
+      // 4. Eksekusi pemotongan saldo di backend serverStore HANYA pada target wallet_id
       const { transaction: newTx, budgetAlert } = serverStore.addTransaction({
         ...payload,
+        wallet_id,
+        wallet_name: targetWallet?.name || payload.wallet_name || 'Dompet Terpilih',
         user_id: effectiveUserId,
       });
 
@@ -111,6 +216,7 @@ export async function POST(req: NextRequest) {
       serverStore.categories.set(effectiveUserId, customCats);
       user.onboarding_completed = true;
       user.updated_at = new Date().toISOString();
+      serverStore.persist();
 
       return NextResponse.json({ ok: true, user, categories: customCats });
     }
@@ -129,6 +235,7 @@ export async function POST(req: NextRequest) {
       }
       wallets.push(newWallet);
       serverStore.wallets.set(effectiveUserId, wallets);
+      serverStore.persist();
       return NextResponse.json({ ok: true, wallet: newWallet });
     }
 
@@ -137,6 +244,8 @@ export async function POST(req: NextRequest) {
       wallets.forEach(w => {
         w.is_default = w.id === payload.walletId;
       });
+      serverStore.wallets.set(effectiveUserId, wallets);
+      serverStore.persist();
       return NextResponse.json({ ok: true, wallets });
     }
 
@@ -144,6 +253,7 @@ export async function POST(req: NextRequest) {
       let wallets = serverStore.getWallets(effectiveUserId);
       wallets = wallets.filter(w => w.id !== payload.walletId && w.id !== 'wal_01');
       serverStore.wallets.set(effectiveUserId, wallets);
+      serverStore.persist();
       return NextResponse.json({ ok: true, wallets });
     }
 
@@ -171,6 +281,7 @@ export async function POST(req: NextRequest) {
         });
       }
       serverStore.budgets.set(effectiveUserId, budgets);
+      serverStore.persist();
       return NextResponse.json({ ok: true, budgets });
     }
 
@@ -179,6 +290,7 @@ export async function POST(req: NextRequest) {
       if (targetUser) {
         targetUser.plan = payload.plan;
         targetUser.updated_at = new Date().toISOString();
+        serverStore.persist();
         return NextResponse.json({ ok: true, user: targetUser });
       }
       return NextResponse.json({ ok: false, error: 'User tidak ditemukan' }, { status: 404 });
@@ -188,7 +300,7 @@ export async function POST(req: NextRequest) {
       const newPay = {
         id: `pay_sim_${Date.now()}`,
         user_id: payload.targetUserId || 'usr_demo_123',
-        user_name: payload.userName || 'Vina Al Fitriansyah',
+        user_name: payload.userName || 'Budi Santoso',
         plan: payload.plan || 'pro',
         amount: payload.amount || 99000,
         payment_method: payload.method || 'manual_transfer',
@@ -198,6 +310,7 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       };
       serverStore.payments.unshift(newPay);
+      serverStore.persist();
       return NextResponse.json({ ok: true, payment: newPay, payments: serverStore.payments });
     }
 
@@ -211,13 +324,144 @@ export async function POST(req: NextRequest) {
       };
       categories.push(newCat);
       serverStore.categories.set(effectiveUserId, categories);
+      serverStore.persist();
       return NextResponse.json({ ok: true, category: newCat });
     }
 
     if (action === 'update_profile') {
       Object.assign(user, payload);
       user.updated_at = new Date().toISOString();
+      serverStore.persist();
       return NextResponse.json({ ok: true, user });
+    }
+
+    if (action === 'approve_user') {
+      const targetUser = serverStore.users.get(payload.targetUserId);
+      if (targetUser) {
+        targetUser.verification_status = 'verified';
+        targetUser.updated_at = new Date().toISOString();
+        serverStore.persist();
+        return NextResponse.json({ ok: true, user: targetUser });
+      }
+      return NextResponse.json({ ok: false, error: 'User tidak ditemukan' }, { status: 404 });
+    }
+
+    if (action === 'check_or_login_user') {
+      const { email, password } = payload || {};
+      const cleanEmail = (email || '').trim().toLowerCase();
+
+      if (!cleanEmail || !password) {
+        return NextResponse.json({ ok: false, error: 'Email atau kata sandi salah' }, { status: 400 });
+      }
+
+      // 1. Integrasi Autentikasi Nyata: Jika Supabase Auth aktif terkonfigurasi
+      if (isLiveSupabaseConfigured()) {
+        try {
+          const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password,
+          });
+
+          if (authErr) {
+            return NextResponse.json({ ok: false, error: 'Email atau kata sandi salah' }, { status: 401 });
+          }
+
+          if (authData?.user) {
+            const meta = authData.user.user_metadata || {};
+            const isSuper = cleanEmail === (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ferdiansyahr213@gmail.com').toLowerCase() || meta.role === 'admin' || meta.role === 'superadmin';
+            let liveUser = serverStore.users.get(authData.user.id) || {
+              id: authData.user.id,
+              full_name: meta.full_name || meta.name || (isSuper ? 'Administrator TataDana' : 'Pengguna TataDana'),
+              email: authData.user.email || cleanEmail,
+              phone_number: meta.phone || authData.user.phone || '081234567890',
+              currency: 'IDR',
+              role: isSuper ? 'superadmin' : (meta.role || 'user'),
+              verification_status: isSuper ? 'verified' : (meta.verification_status || 'pending'),
+              plan: meta.plan || 'pro',
+              telegram_connected: Boolean(meta.telegram_connected),
+              reminder_enabled: true,
+              reminder_frequency: 1,
+              reminder_time_1: '09:00:00',
+              reminder_time_2: '20:00:00',
+              onboarding_completed: true,
+              created_at: authData.user.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            serverStore.users.set(authData.user.id, liveUser as any);
+            return NextResponse.json({ ok: true, user: liveUser });
+          }
+        } catch (authException) {
+          console.error('Supabase live auth error, using fallback:', authException);
+        }
+      }
+
+      // 2. Mode Akun Admin
+      const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ferdiansyahr213@gmail.com').toLowerCase();
+      const adminPassword = process.env.ADMIN_PASSWORD || 'Vina2007';
+
+      if (cleanEmail === adminEmail) {
+        if (password !== adminPassword) {
+          return NextResponse.json({ ok: false, error: 'Email atau kata sandi salah' }, { status: 401 });
+        }
+        const adminUser = serverStore.users.get('usr_admin_999') || {
+          id: 'usr_admin_999',
+          full_name: 'Administrator TataDana',
+          email: adminEmail,
+          phone_number: process.env.NEXT_PUBLIC_ADMIN_WA || '081234567890',
+          role: 'superadmin',
+          verification_status: 'verified',
+          plan: 'pro',
+          telegram_connected: true,
+          reminder_enabled: true,
+          reminder_frequency: 1,
+          reminder_time_1: '09:00:00',
+          reminder_time_2: '20:00:00',
+          onboarding_completed: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        serverStore.users.set('usr_admin_999', adminUser as any);
+        return NextResponse.json({ ok: true, user: adminUser });
+      }
+
+      // 3. User Biasa / Database Store
+      const foundUser = serverStore.getUserByEmail(cleanEmail);
+
+      if (!foundUser) {
+        return NextResponse.json({ ok: false, error: 'Email atau kata sandi salah' }, { status: 401 });
+      }
+
+      // Validasi kata sandi jika tersimpan
+      if (foundUser.password && foundUser.password !== password) {
+        return NextResponse.json({ ok: false, error: 'Email atau kata sandi salah' }, { status: 401 });
+      }
+
+      // Pengecekan status saat login: jika masih pending dan bukan admin, tolak akses dan kembalikan info untuk WhatsApp Admin
+      if (foundUser.verification_status === 'pending' && foundUser.role !== 'admin' && foundUser.role !== 'superadmin') {
+        return NextResponse.json(
+          {
+            ok: false,
+            status: 'pending',
+            error: 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.',
+            user: {
+              id: foundUser.id,
+              full_name: foundUser.full_name,
+              email: foundUser.email,
+              phone_number: foundUser.phone_number,
+              role: foundUser.role,
+              verification_status: 'pending',
+            },
+          },
+          { status: 403 }
+        );
+      }
+
+      return NextResponse.json({ ok: true, user: foundUser });
+    }
+
+    if (action === 'get_all_users') {
+      const allUsers = Array.from(serverStore.users.values());
+      return NextResponse.json({ ok: true, users: allUsers });
     }
 
     if (action === 'approve_payment') {
@@ -226,6 +470,7 @@ export async function POST(req: NextRequest) {
         serverStore.payments[payIdx].status = 'success';
         const targetUser = serverStore.users.get(serverStore.payments[payIdx].user_id);
         if (targetUser) targetUser.plan = serverStore.payments[payIdx].plan;
+        serverStore.persist();
       }
       return NextResponse.json({ ok: true, payments: serverStore.payments });
     }
@@ -234,6 +479,7 @@ export async function POST(req: NextRequest) {
       const payIdx = serverStore.payments.findIndex(p => p.id === payload.paymentId);
       if (payIdx !== -1) {
         serverStore.payments[payIdx].status = 'rejected';
+        serverStore.persist();
       }
       return NextResponse.json({ ok: true, payments: serverStore.payments });
     }
