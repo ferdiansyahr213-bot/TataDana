@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-10-30T11:54:55.032Z",
+  "last_updated": "2026-10-30T11:58:06.612Z",
   "users": [
     [
       "usr_demo_123",
@@ -172,12 +172,12 @@
           "user_id": "usr_admin_999",
           "name": "Rekening Operasional Admin",
           "type": "bank",
-          "balance": 49955000,
+          "balance": 49943000,
           "is_default": true,
           "color": "#4f46e5",
           "icon": "shield",
           "created_at": "2026-10-27T03:18:37.637Z",
-          "updated_at": "2026-10-30T11:21:37.706Z"
+          "updated_at": "2026-10-30T11:58:06.512Z"
         }
       ]
     ],
@@ -915,6 +915,22 @@
     [
       "usr_admin_999",
       [
+        {
+          "user_id": "usr_admin_999",
+          "wallet_id": "wal_admin_1",
+          "wallet_name": "Rekening Operasional Admin",
+          "category_id": "cat_1",
+          "category_name": "Makanan & Minuman",
+          "category_emoji": "🍜",
+          "type": "expense",
+          "amount": 12000,
+          "notes": "buah (via Rekening Operasional Admin)",
+          "source": "telegram_text",
+          "telegram_message_id": 28,
+          "transaction_date": "2026-10-30T11:58:06.512Z",
+          "id": "tx_1793361486512_4ejf2",
+          "created_at": "2026-10-30T11:58:06.512Z"
+        },
         {
           "user_id": "usr_admin_999",
           "wallet_id": "wal_admin_1",

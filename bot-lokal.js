@@ -109,13 +109,107 @@ function telegramApi(method, data = null) {
 }
 
 /**
+ * Sanitasi & Formatting Pesan Telegram (Mencegah Kebocoran Raw JSON)
+ */
+function sanitizeTelegramTextLocal(rawInput) {
+  if (rawInput === null || rawInput === undefined) return '';
+
+  if (typeof rawInput === 'object') {
+    return formatJsonToFriendlyLocal(rawInput);
+  }
+
+  let text = String(rawInput).trim();
+  if (!text) return '';
+
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      return formatJsonToFriendlyLocal(parsed);
+    } catch (e) {}
+  }
+
+  // Jika teks berupa blok code ```json ... ```
+  const codeBlockMatch = text.match(/^\s*```(?:json)?\s*(\{[\s\S]*?\})\s*```\s*$/i);
+  if (codeBlockMatch) {
+    try {
+      const parsed = JSON.parse(codeBlockMatch[1]);
+      return formatJsonToFriendlyLocal(parsed);
+    } catch (e) {}
+  }
+
+  // Bersihkan code block json campuran dan objek raw action
+  text = text
+    .replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```/gi, '')
+    .replace(/\{[\s\S]*?"action"\s*:\s*"(?:INITIATE_PAYMENT|RECORD_INCOME|[^"]+)"[\s\S]*?\}/gi, '')
+    .trim();
+
+  if (!text) {
+    const jsonMatch = String(rawInput).match(/(\{[\s\S]*\})/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        return formatJsonToFriendlyLocal(parsed);
+      } catch (e) {}
+    }
+    return 'Catatan telah berhasil diterima dan diproses.';
+  }
+
+  return text;
+}
+
+function formatJsonToFriendlyLocal(obj) {
+  if (!obj || typeof obj !== 'object') return String(obj || '');
+
+  if (typeof obj.reply === 'string' && obj.reply.trim()) {
+    return sanitizeTelegramTextLocal(obj.reply);
+  }
+  if (typeof obj.message === 'string' && obj.message.trim()) {
+    return sanitizeTelegramTextLocal(obj.message);
+  }
+  if (typeof obj.text === 'string' && obj.text.trim()) {
+    return sanitizeTelegramTextLocal(obj.text);
+  }
+
+  if (obj.action === 'INITIATE_PAYMENT' && obj.data) {
+    const data = obj.data;
+    const item = data.item || data.title || 'Pesanan';
+    const amount = data.amount ? new Intl.NumberFormat('id-ID').format(data.amount) : '0';
+    const options = Array.isArray(data.payment_options) ? data.payment_options : [];
+    const optionsText = options.length > 0
+      ? `\n\nPilihan metode:\n${options.map((opt, i) => `${i + 1}. ${opt}`).join('\n')}`
+      : '';
+    return `Siap, pesanan <b>${item}</b> sebesar <b>Rp ${amount}</b> sudah dicatat. Mau bayar pakai apa?${optionsText}`;
+  }
+
+  if (obj.action === 'RECORD_INCOME' && obj.data) {
+    const data = obj.data;
+    const title = data.title || 'Pemasukan';
+    const amount = data.amount ? new Intl.NumberFormat('id-ID').format(data.amount) : '0';
+    const options = Array.isArray(data.payment_options) ? data.payment_options : [];
+    const optionsText = options.length > 0
+      ? `\n\nSilakan pilih dompet tujuan penerimaan:\n${options.map((opt, i) => `${i + 1}. ${opt}`).join('\n')}`
+      : '';
+    return `Alhamdulillah! Pemasukan <b>${title}</b> sebesar <b>Rp ${amount}</b> siap dicatat. 💰${optionsText}`;
+  }
+
+  if (obj.error) return `⚠️ ${obj.error}`;
+  return 'Permintaan berhasil diproses oleh TataDana.';
+}
+
+/**
  * Mengirim pesan balasan ke chat Telegram
  */
 async function sendMessage(chatId, text, replyToMessageId = null) {
   try {
+    const cleanText = sanitizeTelegramTextLocal(text);
+    if (!cleanText) {
+      console.warn(`[SEND] Pesan ke chat ${chatId} dibatalkan karena kosong setelah sanitasi.`);
+      return null;
+    }
+
     const payload = {
       chat_id: chatId,
-      text: text,
+      text: cleanText,
       parse_mode: 'HTML',
     };
     if (replyToMessageId) {
@@ -304,7 +398,7 @@ function parsePurchaseIntentLocal(text) {
     },
   };
 
-  const replyText = `Siap, pesanan **${itemName}** sebesar **Rp ${formattedAmount}** sudah dicatat. Mau bayar pakai apa?\n\nPilihan metode:\n1. Saldo TataDana\n2. QRIS\n3. Transfer Bank\n4. Tunai / Catat Manual\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+  const replyText = `Siap, pesanan **${itemName}** sebesar **Rp ${formattedAmount}** sudah dicatat. Mau bayar pakai apa?\n\nPilihan metode:\n1. Saldo TataDana\n2. QRIS\n3. Transfer Bank\n4. Tunai / Catat Manual`;
 
   return { item: itemName, amount: nominal, category, replyText, payload };
 }

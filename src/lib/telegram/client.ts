@@ -1,3 +1,5 @@
+import { sanitizeTelegramMessageText } from './formatter';
+
 export interface TelegramGetMeResponse {
   ok: boolean;
   result?: {
@@ -100,11 +102,19 @@ export async function sendTelegramMessage(
   text: string,
   parseMode?: 'Markdown' | 'HTML'
 ): Promise<any> {
+  // Sanitize message: never let raw JSON, code blocks, or raw action objects leak to users
+  const cleanText = sanitizeTelegramMessageText(text);
+
+  if (!cleanText) {
+    console.warn(`[Telegram API] ⚠️ Pesan ke chat_id ${chatId} dibatalkan karena kosong setelah sanitasi.`);
+    return { ok: true, skipped: true };
+  }
+
   // Always log for simulator capture
   simulatorMessageLog.push({
     id: `sim_msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     chatId,
-    text,
+    text: cleanText,
     timestamp: Date.now(),
     parseMode,
   });
@@ -117,7 +127,7 @@ export async function sendTelegramMessage(
         message_id: Date.now(),
         chat: { id: chatId },
         date: Math.floor(Date.now() / 1000),
-        text: text,
+        text: cleanText,
       },
     };
   }
@@ -129,7 +139,7 @@ export async function sendTelegramMessage(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: text,
+        text: cleanText,
         parse_mode: parseMode,
       }),
     });
@@ -143,7 +153,7 @@ export async function sendTelegramMessage(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: text,
+          text: cleanText,
         }),
       });
       const retryResult = await retryRes.json();

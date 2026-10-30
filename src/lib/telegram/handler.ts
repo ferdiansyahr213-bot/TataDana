@@ -10,7 +10,8 @@ import {
   formatStarterLimitReply, 
   formatProOnlyReceiptReply,
   formatFinancialAdvisorReply,
-  formatCalendarReply
+  formatCalendarReply,
+  sanitizeTelegramMessageText
 } from './formatter';
 import { parseTransactionWithAI, parseReceiptWithAI, transcribeVoiceNote, parsePurchaseIntent, parseIncomeIntent } from '../ai/provider-manager';
 import { canAddTransaction, canUseReceiptOCR } from '../utils/plans';
@@ -758,7 +759,7 @@ Ketik /admin untuk membuka Panel Kontrol Admin.`;
             tatadanaCategoryName: purchaseIntent.tatadanaCategoryName,
           });
 
-          await sendTelegramMessage(botToken, chatId, purchaseIntent.replyText);
+          await sendTelegramMessage(botToken, chatId, sanitizeTelegramMessageText(purchaseIntent.replyText));
           return { success: true, status: 'handled_tataai_purchase_intent' };
         }
       }
@@ -876,7 +877,7 @@ Ketik /admin untuk membuka Panel Kontrol Admin.`;
         type: 'income',
       });
 
-      await sendTelegramMessage(botToken, chatId, incomeIntent.replyText);
+      await sendTelegramMessage(botToken, chatId, sanitizeTelegramMessageText(incomeIntent.replyText));
       return { success: true, status: 'handled_income_intent' };
     }
 
@@ -890,7 +891,7 @@ Ketik /admin untuk membuka Panel Kontrol Admin.`;
         tatadanaCategoryName: purchaseIntent.tatadanaCategoryName,
       });
 
-      await sendTelegramMessage(botToken, chatId, purchaseIntent.replyText);
+      await sendTelegramMessage(botToken, chatId, sanitizeTelegramMessageText(purchaseIntent.replyText));
       return { success: true, status: 'handled_purchase_intent' };
     }
 

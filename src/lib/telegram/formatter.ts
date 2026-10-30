@@ -215,3 +215,116 @@ export function formatFinancialAdvisorReply(userName: string, analysis: string, 
 Hei ${userName}! ${analysis}
 💡 Saran: ${advice}`;
 }
+
+/**
+ * Sanitasi pesan Telegram:
+ * 1. Mencegah kebocoran raw JSON atau blok ```json ... ``` ke pengguna Telegram
+ * 2. Mengurai pesan jika AI mengembalikan objek/teks JSON murni
+ * 3. Menghapus tag kode dan mengubah action payload menjadi kalimat teks rapi
+ */
+export function sanitizeTelegramMessageText(rawInput: any): string {
+  if (rawInput === null || rawInput === undefined) return '';
+
+  // 1. Jika input berupa objek JS
+  if (typeof rawInput === 'object') {
+    return formatJsonPayloadToFriendlyText(rawInput);
+  }
+
+  let text = String(rawInput).trim();
+  if (!text) return '';
+
+  // 2. Jika seluruh string merupakan JSON murni: { ... }
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      return formatJsonPayloadToFriendlyText(parsed);
+    } catch {
+      // bukan JSON murni yang valid, lanjutkan ke pembersihan regex
+    }
+  }
+
+  // 3. Jika teks hanya berupa blok markdown ```json ... ``` tanpa teks pengantar
+  const pureCodeBlockMatch = text.match(/^\s*```(?:json)?\s*(\{[\s\S]*?\})\s*```\s*$/i);
+  if (pureCodeBlockMatch) {
+    try {
+      const parsed = JSON.parse(pureCodeBlockMatch[1]);
+      return formatJsonPayloadToFriendlyText(parsed);
+    } catch {
+      // Abaikan jika bukan JSON valid
+    }
+  }
+
+  // 4. Bersihkan blok ```json ... ``` dari teks campuran (seperti replyText yang memiliki pengantar + code block JSON)
+  text = text
+    .replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```/gi, '')
+    // Bersihkan bila ada raw JSON object bertanda action di akhir pesan
+    .replace(/\{[\s\S]*?"action"\s*:\s*"(?:INITIATE_PAYMENT|RECORD_INCOME|[^"]+)"[\s\S]*?\}/gi, '')
+    .trim();
+
+  // 5. Jika setelah dibersihkan teks menjadi kosong (misal karena awalnya berisi code block JSON)
+  if (!text) {
+    const jsonMatch = String(rawInput).match(/(\{[\s\S]*\})/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        return formatJsonPayloadToFriendlyText(parsed);
+      } catch {}
+    }
+    return 'Catatan telah berhasil diterima dan diproses.';
+  }
+
+  return text;
+}
+
+/**
+ * Mengubah objek payload JSON menjadi teks informatif yang ramah pengguna
+ */
+export function formatJsonPayloadToFriendlyText(obj: any): string {
+  if (!obj || typeof obj !== 'object') return String(obj || '');
+
+  // A. Jika ada field teks siap pakai
+  if (typeof obj.reply === 'string' && obj.reply.trim()) {
+    return sanitizeTelegramMessageText(obj.reply);
+  }
+  if (typeof obj.message === 'string' && obj.message.trim()) {
+    return sanitizeTelegramMessageText(obj.message);
+  }
+  if (typeof obj.text === 'string' && obj.text.trim()) {
+    return sanitizeTelegramMessageText(obj.text);
+  }
+
+  // B. Jika berupa action INITIATE_PAYMENT
+  if (obj.action === 'INITIATE_PAYMENT' && obj.data) {
+    const data = obj.data;
+    const item = data.item || data.title || 'Pesanan';
+    const amount = data.amount ? formatRupiah(data.amount) : '0';
+    const options = Array.isArray(data.payment_options) ? data.payment_options : [];
+    const optionsText = options.length > 0
+      ? `\n\nPilihan metode:\n${options.map((opt: string, i: number) => `${i + 1}. ${opt}`).join('\n')}`
+      : '';
+    return `Siap, pesanan *${item}* sebesar *${amount}* sudah dicatat. Mau bayar pakai apa?${optionsText}`;
+  }
+
+  // C. Jika berupa action RECORD_INCOME
+  if (obj.action === 'RECORD_INCOME' && obj.data) {
+    const data = obj.data;
+    const title = data.title || 'Pemasukan';
+    const amount = data.amount ? formatRupiah(data.amount) : '0';
+    const options = Array.isArray(data.payment_options) ? data.payment_options : [];
+    const optionsText = options.length > 0
+      ? `\n\nSilakan pilih dompet tujuan penerimaan:\n${options.map((opt: string, i: number) => `${i + 1}. ${opt}`).join('\n')}`
+      : '';
+    return `Alhamdulillah! Pemasukan *${title}* sebesar *${amount}* siap dicatat. 💰${optionsText}`;
+  }
+
+  // D. Jika ada field status/error
+  if (obj.error) {
+    return `⚠️ ${obj.error}`;
+  }
+  if (obj.status === 'success' || obj.success) {
+    return '✅ Permintaan Anda berhasil diproses.';
+  }
+
+  // Fallback aman: jangan pernah dump JSON mentah
+  return 'Catatan Anda telah berhasil diproses oleh TataDana.';
+}
