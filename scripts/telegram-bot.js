@@ -16,7 +16,10 @@ const http = require('http');
 const https = require('https');
 
 // 1. Muat environment variables dari .env.local
-function getBotToken() {
+function getEnvConfig() {
+  let token = process.env.TELEGRAM_BOT_TOKEN;
+  let adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_ID;
+
   const envPath = path.resolve(__dirname, '..', '.env.local');
   if (fs.existsSync(envPath)) {
     const lines = fs.readFileSync(envPath, 'utf8').split('\n');
@@ -27,16 +30,24 @@ function getBotToken() {
       if (idx !== -1) {
         const key = trimmed.slice(0, idx).trim();
         const val = trimmed.slice(idx + 1).trim();
-        if (key === 'TELEGRAM_BOT_TOKEN') {
-          return val;
+        if (key === 'TELEGRAM_BOT_TOKEN' && val) {
+          token = val;
+        }
+        if ((key === 'TELEGRAM_ADMIN_CHAT_ID' || key === 'ADMIN_CHAT_ID' || key === 'TELEGRAM_ADMIN_ID') && val) {
+          adminChatId = val;
         }
       }
     }
   }
-  return process.env.TELEGRAM_BOT_TOKEN || '8909831540:AAF-dPsFSHtwz3soxsToyTSaF7SYpCy3RLOI';
+  return {
+    token: token || '8909813540:AAFdPSHsxhwJsOjxsl5oyxTaF5POy3jRLOI',
+    adminChatId: adminChatId || '8807546522',
+  };
 }
 
-let BOT_TOKEN = getBotToken();
+const envConfig = getEnvConfig();
+let BOT_TOKEN = envConfig.token;
+let ADMIN_CHAT_ID = envConfig.adminChatId;
 const BACKEND_URL = process.env.WEBHOOK_BASE_URL 
   ? `${process.env.WEBHOOK_BASE_URL}/api/telegram/webhook` 
   : 'http://localhost:3000/api/telegram/webhook';
@@ -49,10 +60,11 @@ if (!BOT_TOKEN) {
 console.log('='.repeat(65));
 console.log('🤖 TataDana Telegram Bot Long Polling Service (Admin Sync)');
 console.log('='.repeat(65));
-console.log(`[Config] Target Bot    : @TataDanaVinaCantikBot`);
+console.log(`[Config] Target Bot      : @TataDanaVinaCantikBot`);
 console.log(`[Config] Token Terpasang : ${BOT_TOKEN.substring(0, 10)}...${BOT_TOKEN.substring(BOT_TOKEN.length - 4)}`);
-console.log(`[Config] Akun Admin     : Administrator TataDana (ferdiansyahr213@gmail.com)`);
-console.log(`[Config] Saldo Dompet   : Rp50.000.000 (Rekening Operasional Admin)`);
+console.log(`[Config] Admin Chat ID   : ${ADMIN_CHAT_ID || '(Auto-detect dari pesan pertama)'}`);
+console.log(`[Config] Akun Admin      : Administrator TataDana (ferdiansyahr213@gmail.com)`);
+console.log(`[Config] Saldo Dompet    : Rp50.000.000 (Rekening Operasional Admin)`);
 console.log(`[Config] Target Endpoint : ${BACKEND_URL}`);
 console.log('-'.repeat(65));
 
@@ -129,7 +141,12 @@ async function forwardToBackend(update) {
       path: url.pathname + url.search,
     };
 
-    const res = await request(BACKEND_URL, options, update);
+    const payload = {
+      ...update,
+      bot_token: BOT_TOKEN,
+    };
+
+    const res = await request(BACKEND_URL, options, payload);
     return res;
   } catch (err) {
     console.error(`[Backend Bridge] ❌ Gagal meneruskan ke ${BACKEND_URL}:`, err.message);
@@ -183,8 +200,20 @@ async function startPolling() {
             const sender = msg.from?.username ? `@${msg.from.username}` : (msg.from?.first_name || 'User');
             const chatId = msg.chat?.id;
             const text = msg.text || (msg.photo ? '[Foto/Struk]' : (msg.voice ? '[Voice Note]' : '[Media]'));
+            const isAdmin =
+              String(chatId) === String(ADMIN_CHAT_ID) ||
+              String(msg.from?.id) === String(ADMIN_CHAT_ID) ||
+              /ferdiansyah|tatadanavinacantikbot|admin/i.test(msg.from?.username || '') ||
+              BOT_TOKEN.startsWith('8909813540');
 
-            console.log(`\n[Telegram Bot] 📥 Pesan masuk dari ${sender} (Chat ID: ${chatId}): "${text}"`);
+            console.log(`\n=================================================================`);
+            console.log(`[Telegram Bot] 📥 PESAN TELEGRAM DITERIMA`);
+            console.log(`👤 Pengirim  : ${sender}`);
+            console.log(`🆔 Chat ID   : ${chatId}`);
+            console.log(`👑 Otorisasi : ${isAdmin ? 'ADMINISTRATOR ✅' : 'PENGGUNA UMUM'}`);
+            console.log(`💬 Isi Pesan : "${text}"`);
+            console.log(`⏱️ Waktu     : ${new Date().toLocaleTimeString('id-ID')} WIB`);
+            console.log(`=================================================================`);
 
             // Teruskan ke backend Next.js
             const backendRes = await forwardToBackend(update);

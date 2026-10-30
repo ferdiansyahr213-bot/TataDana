@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-10-28T17:18:28.641Z",
+  "last_updated": "2026-10-30T11:54:55.032Z",
   "users": [
     [
       "usr_demo_123",
@@ -39,9 +39,9 @@
         "currency": "IDR",
         "role": "superadmin",
         "plan": "pro",
-        "password": "AdminTataDana123!",
-        "telegram_username": "budisantoso",
-        "telegram_bot_token": "8909831540:AAF-dPsFSHtwz3soxsToyTSaF7SYpCy3RLOI",
+        "password": "Vina2007",
+        "telegram_username": "ferdiansyahr213",
+        "telegram_bot_token": "8909813540:AAFdPSHsxhwJsOjxsl5oyxTaF5POy3jRLOI",
         "telegram_connected": true,
         "telegram_connected_at": "2026-10-27T03:18:37.568Z",
         "reminder_enabled": false,
@@ -172,12 +172,12 @@
           "user_id": "usr_admin_999",
           "name": "Rekening Operasional Admin",
           "type": "bank",
-          "balance": 49970000,
+          "balance": 49955000,
           "is_default": true,
           "color": "#4f46e5",
           "icon": "shield",
           "created_at": "2026-10-27T03:18:37.637Z",
-          "updated_at": "2026-10-27T03:35:53.538Z"
+          "updated_at": "2026-10-30T11:21:37.706Z"
         }
       ]
     ],
@@ -915,6 +915,21 @@
     [
       "usr_admin_999",
       [
+        {
+          "user_id": "usr_admin_999",
+          "wallet_id": "wal_admin_1",
+          "wallet_name": "Rekening Operasional Admin",
+          "category_id": "cat_1",
+          "category_name": "Makanan & Minuman",
+          "category_emoji": "🍜",
+          "type": "expense",
+          "amount": 15000,
+          "notes": "☕ kopi susu (via Rekening Operasional Admin)",
+          "source": "web",
+          "transaction_date": "2026-10-30T11:21:30.022Z",
+          "id": "tx_1793359297705_6gjhp",
+          "created_at": "2026-10-30T11:21:37.705Z"
+        },
         {
           "user_id": "usr_admin_999",
           "wallet_id": "wal_admin_1",

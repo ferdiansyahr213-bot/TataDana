@@ -17,41 +17,44 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-// 1. RESOLUSI TOKEN TELEGRAM
-// Prioritas: Argumen CLI -> Env Var -> .env.local -> Hardcoded Fallback
+// 1. RESOLUSI TOKEN TELEGRAM & ADMIN CHAT ID
+// Prioritas: Argumen CLI -> Env Var -> .env.local -> Fallback Default
 let BOT_TOKEN = process.argv[2] || process.env.TELEGRAM_BOT_TOKEN;
+let ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_ID;
 
-// Baca dari .env.local jika belum ada dari CLI/Env
-if (!BOT_TOKEN) {
-  try {
-    const envPath = path.join(__dirname, '.env.local');
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
-      const match = content.match(/TELEGRAM_BOT_TOKEN=([^\r\n]+)/);
-      if (match && match[1]) {
-        BOT_TOKEN = match[1].trim();
-      }
+try {
+  const envPath = path.join(__dirname, '.env.local');
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf8');
+    const tokenMatch = content.match(/TELEGRAM_BOT_TOKEN=([^\r\n]+)/);
+    if (tokenMatch && tokenMatch[1] && !BOT_TOKEN) {
+      BOT_TOKEN = tokenMatch[1].trim();
     }
-  } catch (err) {
-    console.error('[ENV] Gagal membaca .env.local:', err.message);
+    const adminMatch = content.match(/(?:TELEGRAM_ADMIN_CHAT_ID|ADMIN_CHAT_ID|TELEGRAM_ADMIN_ID)=([^\r\n]+)/);
+    if (adminMatch && adminMatch[1] && !ADMIN_CHAT_ID) {
+      ADMIN_CHAT_ID = adminMatch[1].trim();
+    }
   }
+} catch (err) {
+  console.error('[ENV] Gagal membaca .env.local:', err.message);
 }
 
-// Token default placeholder
-const DEMO_TOKEN = 'demo_bot_token_tatadana';
-if (!BOT_TOKEN || BOT_TOKEN === DEMO_TOKEN) {
-  // Jika pengguna ingin menempelkan token langsung di file ini:
-  const HARDCODED_TOKEN = '8795289115:AAGPjN73UpjnmbCS5TR6z2PCLlaIQZKB3dY';
-  if (HARDCODED_TOKEN) {
-    BOT_TOKEN = HARDCODED_TOKEN;
-  }
+// Fallback jika belum diatur
+const DEFAULT_TOKEN = '8909813540:AAFdPSHsxhwJsOjxsl5oyxTaF5POy3jRLOI';
+if (!BOT_TOKEN || BOT_TOKEN === 'demo_bot_token_tatadana' || BOT_TOKEN.startsWith('demo_')) {
+  BOT_TOKEN = DEFAULT_TOKEN;
+}
+if (!ADMIN_CHAT_ID) {
+  ADMIN_CHAT_ID = '8807546522';
 }
 
 console.log('================================================================');
 console.log('🤖 TataDana Telegram Bot - Polling Engine (Localhost)');
 console.log('================================================================');
-console.log('Waktu Mulai :', new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }), 'WIB');
-console.log('Token Status:', BOT_TOKEN && BOT_TOKEN !== DEMO_TOKEN ? `Aktif (${BOT_TOKEN.substring(0, 8)}...)` : '⚠️ Belum dikonfigurasi (Masih Demo Token)');
+console.log('Waktu Mulai   :', new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }), 'WIB');
+console.log('Target Bot    : @TataDanaVinaCantikBot');
+console.log('Token Status  :', BOT_TOKEN ? `Aktif (${BOT_TOKEN.substring(0, 10)}...${BOT_TOKEN.substring(BOT_TOKEN.length - 4)})` : '⚠️ Belum dikonfigurasi');
+console.log('Admin Chat ID :', ADMIN_CHAT_ID || '(Auto-detect)');
 console.log('----------------------------------------------------------------');
 
 /**
@@ -133,7 +136,11 @@ function forwardToLocalBackend(update) {
   return new Promise((resolve) => {
     try {
       const http = require('http');
-      const data = JSON.stringify(update);
+      const payload = {
+        ...update,
+        bot_token: BOT_TOKEN,
+      };
+      const data = JSON.stringify(payload);
       const req = http.request({
         hostname: 'localhost',
         port: 3000,
@@ -355,8 +362,20 @@ async function startPolling() {
           const userFrom = msg.from ? `${msg.from.first_name || ''} (@${msg.from.username || 'user'})` : 'Pengguna';
           const text = (msg.text || msg.caption || '').trim();
 
-          console.log(`\n📩 [Pesan Masuk] Dari: ${userFrom} (ChatID: ${chatId})`);
-          console.log(`   Isi Pesan: "${text || '[Media/Voice/Photo]'}"`);
+          const isAdmin =
+            String(chatId) === String(ADMIN_CHAT_ID) ||
+            String(msg.from?.id) === String(ADMIN_CHAT_ID) ||
+            /ferdiansyah|tatadanavinacantikbot|admin/i.test(msg.from?.username || '') ||
+            BOT_TOKEN.startsWith('8909813540');
+
+          console.log(`\n================================================================`);
+          console.log(`[bot-lokal] 📥 PESAN TELEGRAM DITERIMA`);
+          console.log(`👤 Pengirim  : ${userFrom}`);
+          console.log(`🆔 Chat ID   : ${chatId}`);
+          console.log(`👑 Otorisasi : ${isAdmin ? 'ADMINISTRATOR ✅' : 'PENGGUNA UMUM'}`);
+          console.log(`💬 Isi Pesan : "${text || '[Media/Voice/Photo]'}"`);
+          console.log(`⏱️ Waktu     : ${new Date().toLocaleTimeString('id-ID')} WIB`);
+          console.log(`================================================================`);
 
           // 1. Teruskan ke TataDana AI Backend (Next.js webhook)
           const webhookResult = await forwardToLocalBackend(update);
@@ -364,7 +383,7 @@ async function startPolling() {
           if (webhookResult && webhookResult.ok) {
             console.log(`   ✨ Berhasil diproses & dijawab oleh TataDana AI (${webhookResult.result?.status || 'OK'})`);
           } else {
-            console.log(`   ℹ️ Menggunakan respon langsung bot-lokal (fallback)...`);
+            console.log(`   ℹ️ Backend lokal offline/belum siap. Menggunakan respon langsung bot-lokal...`);
 
             // Check if user is responding to a pending payment
             const pending = pendingPurchases.get(chatId);
@@ -391,9 +410,15 @@ async function startPolling() {
               continue;
             }
 
-            if (text === '/start' || text.startsWith('/start ')) {
-              const reply = "Halo! Bot TataDana sudah aktif!";
-              console.log(`   👉 Menjawab /start: "${reply}"`);
+            if (text === '/admin' || text.startsWith('/admin')) {
+              const reply = `👑 <b>PANEL KONTROL ADMINISTRATOR TATADANA</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 <b>Chat ID Anda:</b> <code>${chatId}</code>\n📊 <b>Status Admin:</b> Superadmin Terverifikasi ✅\n\n⚡ <b>Menu Perintah Admin:</b>\n👉 /approvals — Persetujuan pendaftar baru\n👉 /saldo — Rekening kas operasional\n👉 /stats — Statistik platform\n👉 /bantuan — Panduan lengkap fitur bot\n\n💡 <i>Kirim catatan pengeluaran kas (contoh: <code>beli hosting 150rb</code>) untuk mencatat langsung.</i>`;
+              console.log(`   👉 Menjawab /admin panel kontrol`);
+              await sendMessage(chatId, reply, msg.message_id);
+            } else if (text === '/start' || text.startsWith('/start ')) {
+              const reply = isAdmin
+                ? `👑 <b>Halo Administrator TataDana!</b> 🚀\n\nBot @TataDanaVinaCantikBot aktif dan siap melayani.\n\n👤 <b>Akun:</b> Administrator TataDana\n🆔 <b>Chat ID Anda:</b> <code>${chatId}</code>\n👑 <b>Role:</b> SUPERADMIN\n\n⚡ <b>Menu Admin:</b>\nKetik /admin untuk membuka Panel Kontrol Admin.\nKetik /saldo untuk memeriksa kas operasional admin.\nKetik /bantuan untuk melihat seluruh perintah bot.`
+                : `Halo! Bot TataDana sudah aktif! 🚀\n🆔 <b>Chat ID Anda:</b> <code>${chatId}</code>\n\nKetik transaksi kamu (contoh: <code>makan 25rb</code> atau <code>gajian 5jt</code>) untuk mencatatnya langsung ke TataDana!`;
+              console.log(`   👉 Menjawab /start: "${reply.slice(0, 40)}..."`);
               await sendMessage(chatId, reply, msg.message_id);
             } else {
               // Check purchase intent

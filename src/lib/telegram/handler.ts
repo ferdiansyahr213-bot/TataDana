@@ -176,20 +176,44 @@ export async function processTelegramUpdate(
     let user = serverStore.getUserByTelegramChatId(chatId, botToken);
     const adminUser = serverStore.users.get('usr_admin_999') || serverStore.getUserByEmail('ferdiansyahr213@gmail.com');
 
-    // Jika bot adalah @TataDanaVinaCantikBot (Token 8909831540...) kaitkan langsung ke Administrator TataDana (ferdiansyahr213@gmail.com)
-    const isVinaCantikAdminBot = botToken.startsWith('8909831540') || botToken.includes('AAF-dPsFSHtwz3soxsToyTSaF7SYpCy3RLOI');
+    // Cek TELEGRAM_ADMIN_CHAT_ID dari variabel lingkungan
+    const envAdminChatId = (
+      process.env.TELEGRAM_ADMIN_CHAT_ID ||
+      process.env.ADMIN_CHAT_ID ||
+      process.env.TELEGRAM_ADMIN_ID ||
+      ''
+    ).trim();
+
+    const isEnvAdminChatIdMatch = Boolean(
+      envAdminChatId && (
+        String(chatId) === String(envAdminChatId) ||
+        String(message.from?.id) === String(envAdminChatId)
+      )
+    );
+
+    // Cek apakah bot adalah @TataDanaVinaCantikBot (Token 8909813540... / 8909831540...)
+    const activeEnvToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+    const isVinaCantikAdminBot =
+      botToken.startsWith('8909813540') ||
+      botToken.startsWith('8909831540') ||
+      botToken.includes('AAFdPSHs') ||
+      botToken.includes('AAF-dPsF') ||
+      (Boolean(activeEnvToken) && botToken === activeEnvToken);
+
     const isSenderAdminMatch =
       adminUser &&
-      (adminUser.telegram_chat_id === chatId ||
+      (isEnvAdminChatIdMatch ||
+        adminUser.telegram_chat_id === chatId ||
         message.from?.id === adminUser.telegram_chat_id ||
         (message.from?.username && /ferdiansyah|tatadanavinacantikbot|admin/i.test(message.from.username)));
 
-    if (adminUser && (isVinaCantikAdminBot || isSenderAdminMatch || (!user && isVinaCantikAdminBot))) {
+    if (adminUser && (isEnvAdminChatIdMatch || isVinaCantikAdminBot || isSenderAdminMatch || (!user && isVinaCantikAdminBot))) {
       adminUser.telegram_chat_id = chatId;
       adminUser.telegram_connected = true;
       adminUser.telegram_bot_token = botToken;
       if (message.from?.username) adminUser.telegram_username = message.from.username;
       user = adminUser;
+      serverStore.persist();
       console.log(`[Telegram Handler] 👑 Admin Terotentikasi: ${adminUser.full_name} (${adminUser.email}) - Chat ID: ${chatId}`);
     }
 
