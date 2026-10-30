@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-10-30T11:58:06.612Z",
+  "last_updated": "2026-10-30T12:08:58.308Z",
   "users": [
     [
       "usr_demo_123",
@@ -40,7 +40,7 @@
         "role": "superadmin",
         "plan": "pro",
         "password": "Vina2007",
-        "telegram_username": "ferdiansyahr213",
+        "telegram_username": "revi",
         "telegram_bot_token": "8909813540:AAFdPSHsxhwJsOjxsl5oyxTaF5POy3jRLOI",
         "telegram_connected": true,
         "telegram_connected_at": "2026-10-27T03:18:37.568Z",
@@ -172,12 +172,12 @@
           "user_id": "usr_admin_999",
           "name": "Rekening Operasional Admin",
           "type": "bank",
-          "balance": 49943000,
+          "balance": 49903000,
           "is_default": true,
           "color": "#4f46e5",
           "icon": "shield",
           "created_at": "2026-10-27T03:18:37.637Z",
-          "updated_at": "2026-10-30T11:58:06.512Z"
+          "updated_at": "2026-10-30T12:08:46.022Z"
         }
       ]
     ],
@@ -915,6 +915,38 @@
     [
       "usr_admin_999",
       [
+        {
+          "user_id": "usr_admin_999",
+          "wallet_id": "wal_admin_1",
+          "wallet_name": "Rekening Operasional Admin",
+          "category_id": "cat_1",
+          "category_name": "Makanan & Minuman",
+          "category_emoji": "🍜",
+          "type": "expense",
+          "amount": 25000,
+          "notes": "bakso (via Rekening Operasional Admin)",
+          "source": "telegram_text",
+          "telegram_message_id": 1793362125935,
+          "transaction_date": "2026-10-30T12:08:46.022Z",
+          "id": "tx_1793362126022_gvpn6",
+          "created_at": "2026-10-30T12:08:46.022Z"
+        },
+        {
+          "user_id": "usr_admin_999",
+          "wallet_id": "wal_admin_1",
+          "wallet_name": "Rekening Operasional Admin",
+          "category_id": "cat_1",
+          "category_name": "Makanan & Minuman",
+          "category_emoji": "🍜",
+          "type": "expense",
+          "amount": 15000,
+          "notes": "kopi (via Rekening Operasional Admin)",
+          "source": "telegram_text",
+          "telegram_message_id": 1793362030271,
+          "transaction_date": "2026-10-30T12:07:10.367Z",
+          "id": "tx_1793362030367_ptxd3",
+          "created_at": "2026-10-30T12:07:10.368Z"
+        },
         {
           "user_id": "usr_admin_999",
           "wallet_id": "wal_admin_1",
