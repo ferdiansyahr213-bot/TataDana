@@ -15,8 +15,12 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       // Admin access granted only for role 'admin' or 'superadmin' or admin user id
       if (role === 'admin' || role === 'superadmin' || userId === 'usr_admin_999') {
         setIsAuthorized(true);
+      } else if (!userId) {
+        // Belum login sama sekali: arahkan langsung ke halaman login
+        setIsAuthorized(false);
+        router.replace('/login');
       } else {
-        // Access Denied for regular users: redirect to /dashboard with error message
+        // User umum terdaftar tapi bukan admin: Access Denied
         setIsAuthorized(false);
         router.replace('/dashboard?error=access_denied');
       }

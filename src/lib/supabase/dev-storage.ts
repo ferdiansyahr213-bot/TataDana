@@ -37,6 +37,7 @@ export const INITIAL_ADMIN: UserProfile = {
   currency: 'IDR',
   role: 'superadmin',
   plan: 'pro',
+  password: 'AdminTataDana123!',
   telegram_username: 'TataDanaVinaCantikBot',
   telegram_bot_token: '8909831540:AAF-dPsFSHtwz3soxsToyTSaF7SYpCy3RLOI',
   telegram_connected: true,
