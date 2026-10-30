@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-10-30T12:08:58.308Z",
+  "last_updated": "2026-10-30T12:14:18.092Z",
   "users": [
     [
       "usr_demo_123",
@@ -172,12 +172,12 @@
           "user_id": "usr_admin_999",
           "name": "Rekening Operasional Admin",
           "type": "bank",
-          "balance": 49903000,
+          "balance": 54903000,
           "is_default": true,
           "color": "#4f46e5",
           "icon": "shield",
           "created_at": "2026-10-27T03:18:37.637Z",
-          "updated_at": "2026-10-30T12:08:46.022Z"
+          "updated_at": "2026-10-30T12:14:17.978Z"
         }
       ]
     ],
@@ -915,6 +915,22 @@
     [
       "usr_admin_999",
       [
+        {
+          "user_id": "usr_admin_999",
+          "wallet_id": "wal_admin_1",
+          "wallet_name": "Rekening Operasional Admin",
+          "category_id": "cat_8",
+          "category_name": "Gaji",
+          "category_emoji": "💼",
+          "type": "income",
+          "amount": 5000000,
+          "notes": "gajian (masuk ke Rekening Operasional Admin)",
+          "source": "telegram_text",
+          "telegram_message_id": 3,
+          "transaction_date": "2026-10-30T12:14:17.978Z",
+          "id": "tx_1793362457978_ijs9f",
+          "created_at": "2026-10-30T12:14:17.978Z"
+        },
         {
           "user_id": "usr_admin_999",
           "wallet_id": "wal_admin_1",

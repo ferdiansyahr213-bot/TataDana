@@ -328,3 +328,63 @@ export function formatJsonPayloadToFriendlyText(obj: any): string {
   // Fallback aman: jangan pernah dump JSON mentah
   return 'Catatan Anda telah berhasil diproses oleh TataDana.';
 }
+
+/**
+ * Mengonversi format Markdown (termasuk **teks** ganda dari Gemini / OpenAI dan *teks* tunggal)
+ * menjadi format HTML Telegram yang aman, kebal error karakter spesial, dan dirender tebal dengan benar.
+ */
+export function convertMarkdownToTelegramHtml(markdownText: string): string {
+  if (!markdownText) return '';
+
+  let text = String(markdownText);
+
+  // 1. Ekstrak code blocks ``` ... ``` sementara
+  const codeBlocks: string[] = [];
+  text = text.replace(/```(?:[a-zA-Z0-9_-]+)?\n?([\s\S]*?)```/g, (_, code) => {
+    const placeholder = `@@@PREBLOCK${codeBlocks.length}@@@`;
+    const escapedCode = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    codeBlocks.push(`<pre>${escapedCode.trim()}</pre>`);
+    return placeholder;
+  });
+
+  // 2. Ekstrak inline code `...` sementara
+  const inlineCodes: string[] = [];
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    const placeholder = `@@@INLINECODE${inlineCodes.length}@@@`;
+    const escaped = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    inlineCodes.push(`<code>${escaped}</code>`);
+    return placeholder;
+  });
+
+  // 3. Escape karakter HTML khusus yang bukan tag valid
+  text = text
+    .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;)/g, '&amp;')
+    .replace(/<(?!\/?(?:b|strong|i|em|code|pre|a|u|s)(?:>|\s[^>]*>))/gi, '&lt;')
+    .replace(/(?<!(?:<[^>]*)|\b[a-zA-Z0-9_-]+)>(?![^<]*>)/g, '&gt;');
+
+  // 4. Konversi Bold ganda: **teks** atau __teks__ -> <b>teks</b>
+  text = text.replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>');
+  text = text.replace(/__(.+?)__/gs, '<b>$1</b>');
+
+  // 5. Konversi Bold tunggal Telegram klasik: *teks* -> <b>teks</b>
+  text = text.replace(/(?<![*\w])\*([^\s*][^*]*?[^\s*]|\S)\*(?![*\w])/g, '<b>$1</b>');
+
+  // 6. Konversi Italic tunggal: _teks_ -> <i>teks</i>
+  text = text.replace(/(?<![\w_])_([^\s_][^_]*?[^\s_]|\S)_(?![\w_])/g, '<i>$1</i>');
+
+  // 7. Kembalikan placeholder inline code dan code blocks
+  inlineCodes.forEach((code, idx) => {
+    text = text.replace(`@@@INLINECODE${idx}@@@`, code);
+  });
+  codeBlocks.forEach((block, idx) => {
+    text = text.replace(`@@@PREBLOCK${idx}@@@`, block);
+  });
+
+  return text;
+}

@@ -197,6 +197,65 @@ function formatJsonToFriendlyLocal(obj) {
 }
 
 /**
+ * Normalisasi format Markdown (*teks*, **teks**, `code`) ke HTML Telegram
+ */
+function convertMarkdownToTelegramHtmlLocal(markdownText) {
+  if (!markdownText) return '';
+
+  let text = String(markdownText);
+
+  // 1. Ekstrak code blocks ``` ... ``` sementara
+  const codeBlocks = [];
+  text = text.replace(/```(?:[a-zA-Z0-9_-]+)?\n?([\s\S]*?)```/g, (_, code) => {
+    const placeholder = `@@@PREBLOCK${codeBlocks.length}@@@`;
+    const escapedCode = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    codeBlocks.push(`<pre>${escapedCode.trim()}</pre>`);
+    return placeholder;
+  });
+
+  // 2. Ekstrak inline code `...` sementara
+  const inlineCodes = [];
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    const placeholder = `@@@INLINECODE${inlineCodes.length}@@@`;
+    const escaped = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    inlineCodes.push(`<code>${escaped}</code>`);
+    return placeholder;
+  });
+
+  // 3. Escape karakter HTML khusus yang bukan tag valid
+  text = text
+    .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;)/g, '&amp;')
+    .replace(/<(?!\/?(?:b|strong|i|em|code|pre|a|u|s)(?:>|\s[^>]*>))/gi, '&lt;')
+    .replace(/(?<!(?:<[^>]*)|\b[a-zA-Z0-9_-]+)>(?![^<]*>)/g, '&gt;');
+
+  // 4. Konversi Bold ganda: **teks** atau __teks__ -> <b>teks</b>
+  text = text.replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>');
+  text = text.replace(/__(.+?)__/gs, '<b>$1</b>');
+
+  // 5. Konversi Bold tunggal Telegram klasik: *teks* -> <b>teks</b>
+  text = text.replace(/(?<![*\w])\*([^\s*][^*]*?[^\s*]|\S)\*(?![*\w])/g, '<b>$1</b>');
+
+  // 6. Konversi Italic tunggal: _teks_ -> <i>teks</i>
+  text = text.replace(/(?<![\w_])_([^\s_][^_]*?[^\s_]|\S)_(?![\w_])/g, '<i>$1</i>');
+
+  // 7. Kembalikan placeholder inline code dan code blocks
+  inlineCodes.forEach((code, idx) => {
+    text = text.replace(`@@@INLINECODE${idx}@@@`, code);
+  });
+  codeBlocks.forEach((block, idx) => {
+    text = text.replace(`@@@PREBLOCK${idx}@@@`, block);
+  });
+
+  return text;
+}
+
+/**
  * Mengirim pesan balasan ke chat Telegram
  */
 async function sendMessage(chatId, text, replyToMessageId = null) {
@@ -207,15 +266,34 @@ async function sendMessage(chatId, text, replyToMessageId = null) {
       return null;
     }
 
+    // Normalisasi formatting bold & markdown ke HTML Telegram
+    const formattedHtml = convertMarkdownToTelegramHtmlLocal(cleanText);
+
     const payload = {
       chat_id: chatId,
-      text: cleanText,
+      text: formattedHtml,
       parse_mode: 'HTML',
     };
     if (replyToMessageId) {
       payload.reply_to_message_id = replyToMessageId;
     }
-    const res = await telegramApi('sendMessage', payload);
+    let res = await telegramApi('sendMessage', payload);
+
+    // Fallback otomatis jika Telegram menolak formatting HTML (error 400 Bad Request)
+    if (res && !res.ok && (res.error_code === 400 || /can't parse/i.test(res.description || ''))) {
+      console.warn(`[SEND] ⚠️ Telegram menolak HTML (${res.description}). Mengirim ulang sebagai plain text...`);
+      const plainText = cleanText
+        .replace(/<[^>]*>/g, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1');
+
+      res = await telegramApi('sendMessage', {
+        chat_id: chatId,
+        text: plainText,
+        ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {})
+      });
+    }
+
     return res;
   } catch (err) {
     console.error(`[SEND] Gagal mengirim pesan ke chat ${chatId}:`, err.message);

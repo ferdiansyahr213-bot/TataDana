@@ -1,4 +1,4 @@
-import { sanitizeTelegramMessageText } from './formatter';
+import { sanitizeTelegramMessageText, convertMarkdownToTelegramHtml } from './formatter';
 
 export interface TelegramGetMeResponse {
   ok: boolean;
@@ -102,7 +102,7 @@ export async function sendTelegramMessage(
   text: string,
   parseMode?: 'Markdown' | 'HTML'
 ): Promise<any> {
-  // Sanitize message: never let raw JSON, code blocks, or raw action objects leak to users
+  // 1. Sanitize text first: never let raw JSON, code blocks, or raw action objects leak to users
   const cleanText = sanitizeTelegramMessageText(text);
 
   if (!cleanText) {
@@ -110,13 +110,24 @@ export async function sendTelegramMessage(
     return { ok: true, skipped: true };
   }
 
+  // 2. Default parseMode: gunakan 'HTML' (lebih kebal karakter spesial dan mendukung <b>teks</b>)
+  const effectiveParseMode: 'Markdown' | 'HTML' = parseMode || 'HTML';
+
+  // 3. Normalisasi formatting: konversi **teks** dan *teks* menjadi <b>teks</b> Telegram HTML yang valid
+  let formattedText = cleanText;
+  if (effectiveParseMode === 'HTML') {
+    formattedText = convertMarkdownToTelegramHtml(cleanText);
+  } else if (effectiveParseMode === 'Markdown') {
+    formattedText = cleanText.replace(/\*\*(.+?)\*\*/gs, '*$1*');
+  }
+
   // Always log for simulator capture
   simulatorMessageLog.push({
     id: `sim_msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     chatId,
-    text: cleanText,
+    text: formattedText,
     timestamp: Date.now(),
-    parseMode,
+    parseMode: effectiveParseMode,
   });
 
   // If using demo or mock bot token in local development/simulator mode
@@ -127,33 +138,38 @@ export async function sendTelegramMessage(
         message_id: Date.now(),
         chat: { id: chatId },
         date: Math.floor(Date.now() / 1000),
-        text: cleanText,
+        text: formattedText,
       },
     };
   }
 
   try {
-    console.log(`[Telegram API] 📤 Mengirim balasan ke chat_id ${chatId}...`);
+    console.log(`[Telegram API] 📤 Mengirim balasan ke chat_id ${chatId} (parse_mode: ${effectiveParseMode})...`);
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: cleanText,
-        parse_mode: parseMode,
+        text: formattedText,
+        parse_mode: effectiveParseMode,
       }),
     });
     const result = await res.json();
 
-    // Fallback: Jika Telegram gagal parse markdown (error 400 Bad Request), kirim ulang sebagai plain text
-    if (!result.ok && parseMode && (result.error_code === 400 || /can't parse|entities|markdown/i.test(result.description || ''))) {
-      console.warn(`[Telegram API] ⚠️ Gagal mengirim dengan parseMode ${parseMode} (${result.description}). Mencoba kirim ulang sebagai teks biasa...`);
+    // Fallback otomatis: Jika Telegram gagal parse formatting (error 400 Bad Request), kirim ulang sebagai plain text
+    if (!result.ok && (result.error_code === 400 || /can't parse|entities|markdown|html/i.test(result.description || ''))) {
+      console.warn(`[Telegram API] ⚠️ Gagal mengirim dengan parse_mode ${effectiveParseMode} (${result.description}). Mencoba kirim ulang sebagai teks biasa tanpa parse_mode...`);
+      const plainText = cleanText
+        .replace(/<[^>]*>/g, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1');
+
       const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: cleanText,
+          text: plainText,
         }),
       });
       const retryResult = await retryRes.json();
@@ -176,6 +192,19 @@ export async function sendTelegramMessage(
     return result;
   } catch (error) {
     console.error('[Telegram API] ❌ Network error sending Telegram message:', error);
-    return { ok: false, error };
+    try {
+      const plainFallback = cleanText.replace(/<[^>]*>/g, '').replace(/\*\*(.*?)\*\*/g, '$1');
+      const fallbackRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: plainFallback,
+        }),
+      });
+      return await fallbackRes.json();
+    } catch {
+      return { ok: false, error };
+    }
   }
 }
