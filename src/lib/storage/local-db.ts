@@ -148,6 +148,17 @@ export function getSqliteDb(): any {
         created_at TEXT,
         updated_at TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        emoji TEXT,
+        color TEXT,
+        is_custom INTEGER DEFAULT 0,
+        created_at TEXT
+      );
     `);
 
     // Ensure all user columns exist
@@ -445,15 +456,139 @@ export function loadLocalDatabase(): PersistentDataSnapshot | null {
         usersMap.set(r.id, mergedUser);
       }
 
+      // 4. Wallets from SQLite
+      const walletRows = db.prepare('SELECT * FROM wallets').all() as any[];
+      const walletsMap = new Map<string, Wallet[]>();
+      if (parsed?.wallets) {
+        for (const [uid, wList] of parsed.wallets) walletsMap.set(uid, wList);
+      }
+      for (const r of walletRows) {
+        const uId = r.user_id;
+        const currentList = walletsMap.get(uId) || [];
+        const existingIdx = currentList.findIndex(w => w.id === r.id);
+        const wObj: Wallet = {
+          id: r.id,
+          user_id: r.user_id,
+          name: r.name,
+          type: r.type,
+          balance: Number(r.balance) || 0,
+          is_default: r.is_default === 1,
+          color: r.color || '#0284c7',
+          icon: r.icon || 'landmark',
+          created_at: r.created_at || new Date().toISOString(),
+          updated_at: r.updated_at || new Date().toISOString(),
+        };
+        if (existingIdx !== -1) {
+          currentList[existingIdx] = wObj;
+        } else {
+          currentList.push(wObj);
+        }
+        walletsMap.set(uId, currentList);
+      }
+
+      // 5. Transactions from SQLite
+      const txRows = db.prepare('SELECT * FROM transactions ORDER BY transaction_date DESC').all() as any[];
+      const transactionsMap = new Map<string, Transaction[]>();
+      if (parsed?.transactions) {
+        for (const [uid, txList] of parsed.transactions) transactionsMap.set(uid, txList);
+      }
+      for (const r of txRows) {
+        const uId = r.user_id;
+        const currentList = transactionsMap.get(uId) || [];
+        const existingIdx = currentList.findIndex(t => t.id === r.id);
+        const tObj: Transaction = {
+          id: r.id,
+          user_id: r.user_id,
+          wallet_id: r.wallet_id,
+          wallet_name: r.wallet_name || '',
+          category_id: r.category_id || '',
+          category_name: r.category_name || '',
+          category_emoji: r.category_emoji || '',
+          type: r.type as any,
+          amount: Number(r.amount) || 0,
+          notes: r.notes || '',
+          source: (r.source as any) || 'web',
+          merchant_name: r.merchant_name || '',
+          destination_wallet_id: r.destination_wallet_id || '',
+          destination_wallet_name: r.destination_wallet_name || '',
+          telegram_message_id: r.telegram_message_id || undefined,
+          transaction_date: r.transaction_date || r.created_at || new Date().toISOString(),
+          created_at: r.created_at || new Date().toISOString(),
+        };
+        if (existingIdx !== -1) {
+          currentList[existingIdx] = tObj;
+        } else {
+          currentList.push(tObj);
+        }
+        transactionsMap.set(uId, currentList);
+      }
+
+      // 6. Budgets from SQLite
+      const budgetRows = db.prepare('SELECT * FROM budgets').all() as any[];
+      const budgetsMap = new Map<string, Budget[]>();
+      if (parsed?.budgets) {
+        for (const [uid, bList] of parsed.budgets) budgetsMap.set(uid, bList);
+      }
+      for (const r of budgetRows) {
+        const uId = r.user_id;
+        const currentList = budgetsMap.get(uId) || [];
+        const existingIdx = currentList.findIndex(b => b.id === r.id);
+        const bObj: Budget = {
+          id: r.id,
+          user_id: r.user_id,
+          category_id: r.category_id,
+          category_name: r.category_name || '',
+          amount: Number(r.amount) || 0,
+          spent: Number(r.spent) || 0,
+          month_period: r.month_period || '',
+          alert_80_sent: false,
+          alert_100_sent: false,
+        };
+        if (existingIdx !== -1) {
+          currentList[existingIdx] = bObj;
+        } else {
+          currentList.push(bObj);
+        }
+        budgetsMap.set(uId, currentList);
+      }
+
+      // 7. Categories from SQLite
+      const categoriesMap = new Map<string, Category[]>();
+      if (parsed?.categories) {
+        for (const [uid, cList] of parsed.categories) categoriesMap.set(uid, cList);
+      }
+      try {
+        const catRows = db.prepare('SELECT * FROM categories').all() as any[];
+        for (const r of catRows) {
+          const uId = r.user_id;
+          const currentList = categoriesMap.get(uId) || [];
+          const existingIdx = currentList.findIndex(c => c.id === r.id);
+          const cObj: Category = {
+            id: r.id,
+            name: r.name,
+            type: r.type,
+            emoji: r.emoji || '🏷️',
+            color: r.color || '#2563eb',
+            is_custom: r.is_custom === 1,
+          };
+          if (existingIdx !== -1) {
+            currentList[existingIdx] = cObj;
+          } else {
+            currentList.push(cObj);
+          }
+          categoriesMap.set(uId, currentList);
+        }
+      } catch {}
+
       if (!parsed && usersMap.size > 0) {
         parsed = {
           version: 1,
           last_updated: new Date().toISOString(),
           users: Array.from(usersMap.entries()),
-          wallets: [],
-          categories: [],
-          budgets: [],
-          transactions: [],
+          wallets: Array.from(walletsMap.entries()),
+          categories: Array.from(categoriesMap.entries()),
+          budgets: Array.from(budgetsMap.entries()),
+          transactions: Array.from(transactionsMap.entries()),
           payments: [],
           aiLogs: [],
           aiProviders: [],
@@ -464,6 +599,10 @@ export function loadLocalDatabase(): PersistentDataSnapshot | null {
 
       if (parsed) {
         parsed.users = Array.from(usersMap.entries());
+        parsed.wallets = Array.from(walletsMap.entries());
+        parsed.transactions = Array.from(transactionsMap.entries());
+        parsed.budgets = Array.from(budgetsMap.entries());
+        if (categoriesMap.size > 0) parsed.categories = Array.from(categoriesMap.entries());
         parsed.settings = Array.from(settingsMap.entries());
         parsed.userApprovals = Array.from(approvalMap.values());
       }
@@ -660,6 +799,29 @@ export function saveLocalDatabase(snapshot: PersistentDataSnapshot): void {
               a.created_at || new Date().toISOString(),
               a.updated_at || new Date().toISOString()
             );
+          }
+        }
+
+        // Sync categories
+        if (snapshot.categories && snapshot.categories.length > 0) {
+          const catStmt = db.prepare(`
+            INSERT OR REPLACE INTO categories (
+              id, user_id, name, type, emoji, color, is_custom, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const [userId, catList] of snapshot.categories) {
+            for (const c of catList) {
+              catStmt.run(
+                c.id,
+                userId,
+                c.name,
+                c.type,
+                c.emoji || '🏷️',
+                c.color || '#2563eb',
+                c.is_custom ? 1 : 0,
+                new Date().toISOString()
+              );
+            }
           }
         }
       } catch (sqlErr: any) {

@@ -7,8 +7,15 @@ import type { Category } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const userId = url.searchParams.get('userId') || 'usr_demo_123';
-  const user = serverStore.users.get(userId) || serverStore.users.get('usr_demo_123')!;
+  const requestedId = url.searchParams.get('userId');
+
+  let user = requestedId 
+    ? (serverStore.users.get(requestedId) || serverStore.getUserByIdentifier(requestedId))
+    : undefined;
+
+  if (!user) {
+    user = serverStore.users.get('usr_demo_123') || Array.from(serverStore.users.values())[0];
+  }
 
   return NextResponse.json({
     ok: true,

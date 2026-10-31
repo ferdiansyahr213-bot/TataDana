@@ -54,85 +54,37 @@ class ServerStore {
     this.settings.set('admin_phone_number', defaultAdminWA);
     this.settings.set('admin_email', 'ferdiansyahr213@gmail.com');
 
-    this.users.set(INITIAL_USER.id, { ...INITIAL_USER });
-    this.users.set(INITIAL_ADMIN.id, { ...INITIAL_ADMIN, phone_number: defaultAdminWA });
-
-    // Pending demo user for testing approval workflows
-    this.users.set('usr_demo_456', {
-      id: 'usr_demo_456',
-      email: 'siti.rahma@tatadana.id',
-      full_name: 'Siti Rahma',
-      phone_number: '081987654321',
-      avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-      currency: 'IDR',
-      role: 'user',
-      plan: 'starter',
-      verification_status: 'pending',
-      telegram_connected: false,
-      reminder_enabled: true,
-      reminder_frequency: 1,
-      reminder_time_1: '09:00:00',
-      reminder_time_2: '20:00:00',
-      onboarding_completed: true,
-      created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-
-    this.wallets.set(INITIAL_USER.id, [...INITIAL_WALLETS]);
-    this.categories.set(INITIAL_USER.id, [...INITIAL_CATEGORIES]);
-    this.budgets.set(INITIAL_USER.id, [...INITIAL_BUDGETS]);
-    this.transactions.set(INITIAL_USER.id, [...INITIAL_TRANSACTIONS]);
-
-    // Admin operational wallet & categories
-    this.wallets.set(INITIAL_ADMIN.id, [{
-      id: 'wal_admin_1',
-      user_id: INITIAL_ADMIN.id,
-      name: 'Rekening Operasional Admin',
-      type: 'bank',
-      balance: 50000000,
-      is_default: true,
-      color: '#4f46e5',
-      icon: 'shield',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }]);
-    this.categories.set(INITIAL_ADMIN.id, [...INITIAL_CATEGORIES]);
-    this.transactions.set(INITIAL_ADMIN.id, []);
-    this.budgets.set(INITIAL_ADMIN.id, []);
-
-    // Restore from persistent storage (JSON & SQLite) if available
+    // 1. PRIORITAS UTAMA: Muat database persisten (SQLite & JSON) terlebih dahulu
     const persisted = loadLocalDatabase();
-    if (persisted) {
-      if (persisted.users && persisted.users.length > 0) this.users = new Map(persisted.users);
-      if (persisted.wallets && persisted.wallets.length > 0) this.wallets = new Map(persisted.wallets);
-      if (persisted.categories && persisted.categories.length > 0) this.categories = new Map(persisted.categories);
-      if (persisted.budgets && persisted.budgets.length > 0) this.budgets = new Map(persisted.budgets);
-      if (persisted.transactions && persisted.transactions.length > 0) this.transactions = new Map(persisted.transactions);
-      if (persisted.payments && persisted.payments.length > 0) this.payments = [...persisted.payments];
-      if (persisted.aiLogs && persisted.aiLogs.length > 0) this.aiLogs = [...persisted.aiLogs];
-      if (persisted.aiProviders && persisted.aiProviders.length > 0) this.aiProviders = [...persisted.aiProviders];
+    if (persisted && persisted.users && persisted.users.length > 0) {
+      this.users = new Map(persisted.users);
+      if (persisted.wallets) this.wallets = new Map(persisted.wallets);
+      if (persisted.categories) this.categories = new Map(persisted.categories);
+      if (persisted.budgets) this.budgets = new Map(persisted.budgets);
+      if (persisted.transactions) this.transactions = new Map(persisted.transactions);
+      if (persisted.payments) this.payments = [...persisted.payments];
+      if (persisted.aiLogs) this.aiLogs = [...persisted.aiLogs];
+      if (persisted.aiProviders) this.aiProviders = [...persisted.aiProviders];
       if (persisted.aiSettings) this.aiSettings = { ...persisted.aiSettings };
-      if (persisted.exports && persisted.exports.length > 0) this.exports = [...persisted.exports];
-      if (persisted.settings && persisted.settings.length > 0) {
+      if (persisted.exports) this.exports = [...persisted.exports];
+      if (persisted.settings) {
         for (const [k, v] of persisted.settings) {
           this.settings.set(k, v);
         }
       }
-      if (persisted.userApprovals && persisted.userApprovals.length > 0) {
+      if (persisted.userApprovals) {
         for (const a of persisted.userApprovals) {
           this.userApprovals.set(a.id, a);
         }
       }
 
-      // Ensure admin & initial user exist if somehow omitted, but NEVER overwrite existing admin phone/password!
-      if (!this.users.has(INITIAL_USER.id)) this.users.set(INITIAL_USER.id, { ...INITIAL_USER });
+      // Pastikan akun admin utama tetap ada tanpa menimpa nomor WA atau data pengguna yang telah diedit
       if (!this.users.has(INITIAL_ADMIN.id)) {
         this.users.set(INITIAL_ADMIN.id, {
           ...INITIAL_ADMIN,
           phone_number: this.settings.get('admin_wa_number') || defaultAdminWA,
         });
       } else {
-        // Sync saved admin_wa_number if admin's phone number was previously default or changed
         const currentAdmin = this.users.get(INITIAL_ADMIN.id)!;
         const savedSetting = this.settings.get('admin_wa_number') || this.settings.get('admin_phone_number');
         if (savedSetting && currentAdmin.phone_number !== savedSetting) {
@@ -140,7 +92,23 @@ class ServerStore {
         }
       }
 
-      // Sync user approvals for any pending users in users map
+      // Pastikan dompet admin operasional ada
+      if (!this.wallets.has(INITIAL_ADMIN.id) || (this.wallets.get(INITIAL_ADMIN.id)?.length || 0) === 0) {
+        this.wallets.set(INITIAL_ADMIN.id, [{
+          id: 'wal_admin_1',
+          user_id: INITIAL_ADMIN.id,
+          name: 'Rekening Operasional Admin',
+          type: 'bank',
+          balance: 50000000,
+          is_default: true,
+          color: '#4f46e5',
+          icon: 'shield',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }]);
+      }
+
+      // Sinkronkan userApprovals untuk setiap pengguna non-admin yang belum ada di daftar approvals
       for (const u of this.users.values()) {
         if (u.role !== 'admin' && u.role !== 'superadmin') {
           const apprId = `appr_${u.id}`;
@@ -158,31 +126,39 @@ class ServerStore {
         }
       }
 
-      if (!this.wallets.has(INITIAL_ADMIN.id)) {
-        this.wallets.set(INITIAL_ADMIN.id, [{
-          id: 'wal_admin_1',
-          user_id: INITIAL_ADMIN.id,
-          name: 'Rekening Operasional Admin',
-          type: 'bank',
-          balance: 50000000,
-          is_default: true,
-          color: '#4f46e5',
-          icon: 'shield',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }]);
-      }
-
       const totalTx = Array.from(this.transactions.values()).reduce((sum, list) => sum + list.length, 0);
-      console.log(`[ServerStore] 💾 Database lokal aktif! Memuat ${totalTx} transaksi, ${this.users.size} pengguna, ${this.userApprovals.size} approval, dan saldo dompet.`);
+      console.log(`[ServerStore] 💾 Database persisten aktif! Memuat ${totalTx} transaksi, ${this.users.size} pengguna, ${this.userApprovals.size} approval, dan saldo dompet tanpa reset.`);
     } else {
-      // First run: persist baseline data so files exist
+      // 2. HANYA JIKA DATABASE 100% KOSONG (Fresh Install Pertama Kali):
+      this.users.set(INITIAL_USER.id, { ...INITIAL_USER });
+      this.users.set(INITIAL_ADMIN.id, { ...INITIAL_ADMIN, phone_number: defaultAdminWA });
+      this.wallets.set(INITIAL_USER.id, [...INITIAL_WALLETS]);
+      this.categories.set(INITIAL_USER.id, [...INITIAL_CATEGORIES]);
+      this.budgets.set(INITIAL_USER.id, [...INITIAL_BUDGETS]);
+      this.transactions.set(INITIAL_USER.id, [...INITIAL_TRANSACTIONS]);
+
+      this.wallets.set(INITIAL_ADMIN.id, [{
+        id: 'wal_admin_1',
+        user_id: INITIAL_ADMIN.id,
+        name: 'Rekening Operasional Admin',
+        type: 'bank',
+        balance: 50000000,
+        is_default: true,
+        color: '#4f46e5',
+        icon: 'shield',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }]);
+      this.categories.set(INITIAL_ADMIN.id, [...INITIAL_CATEGORIES]);
+      this.transactions.set(INITIAL_ADMIN.id, []);
+      this.budgets.set(INITIAL_ADMIN.id, []);
+
       this.persist();
-      console.log(`[ServerStore] 📁 Database lokal pertama kali diinisialisasi & disimpan ke data/tatadana-local-db.json dan data/tatadana.db`);
+      console.log(`[ServerStore] 📁 Database pertama kali diinisialisasi & disimpan permanen ke data/tatadana-local-db.json dan data/tatadana.db`);
     }
   }
 
-  // Persist snapshot to disk (JSON & SQLite)
+  // Persist snapshot to disk (JSON & SQLite) dan Supabase
   persist(): void {
     try {
       const snapshot: PersistentDataSnapshot = {
@@ -202,8 +178,67 @@ class ServerStore {
         userApprovals: Array.from(this.userApprovals.values()),
       };
       saveLocalDatabase(snapshot);
+
+      // Sinkronkan ke Supabase jika kredensial aktif
+      if (isServerSupabaseConfigured()) {
+        this.syncToSupabase(snapshot).catch((err: any) => {
+          console.warn('[ServerStore] Supabase async sync notice:', err.message);
+        });
+      }
     } catch (err: any) {
       console.error('[ServerStore] ⚠️ Gagal persist database:', err.message);
+    }
+  }
+
+  async syncToSupabase(snapshot: PersistentDataSnapshot): Promise<void> {
+    if (!isServerSupabaseConfigured()) return;
+    try {
+      if (snapshot.settings && snapshot.settings.length > 0) {
+        const rows = snapshot.settings.map(([k, v]) => ({
+          key: k,
+          value: v,
+          updated_at: new Date().toISOString(),
+        }));
+        await supabaseAdmin.from('app_settings').upsert(rows);
+      }
+      if (snapshot.userApprovals && snapshot.userApprovals.length > 0) {
+        await supabaseAdmin.from('user_approvals').upsert(snapshot.userApprovals);
+      }
+      if (snapshot.users && snapshot.users.length > 0) {
+        const userRows = snapshot.users.map(([, u]) => ({
+          id: u.id,
+          email: u.email,
+          full_name: u.full_name,
+          phone_number: u.phone_number,
+          role: u.role,
+          plan: u.plan,
+          verification_status: u.verification_status,
+          currency: u.currency,
+          telegram_chat_id: u.telegram_chat_id,
+          telegram_username: u.telegram_username,
+          telegram_connected: u.telegram_connected,
+          onboarding_completed: u.onboarding_completed,
+          created_at: u.created_at,
+          updated_at: u.updated_at,
+        }));
+        await supabaseAdmin.from('users').upsert(userRows);
+      }
+      if (snapshot.wallets && snapshot.wallets.length > 0) {
+        const allWallets: Wallet[] = [];
+        for (const [, list] of snapshot.wallets) allWallets.push(...list);
+        if (allWallets.length > 0) {
+          await supabaseAdmin.from('wallets').upsert(allWallets);
+        }
+      }
+      if (snapshot.transactions && snapshot.transactions.length > 0) {
+        const allTx: Transaction[] = [];
+        for (const [, list] of snapshot.transactions) allTx.push(...list);
+        if (allTx.length > 0) {
+          await supabaseAdmin.from('transactions').upsert(allTx);
+        }
+      }
+    } catch (e: any) {
+      console.warn('[ServerStore] syncToSupabase error:', e.message);
     }
   }
 
@@ -483,19 +518,24 @@ class ServerStore {
     if (!identifier) return undefined;
     const clean = identifier.trim();
 
-    // Prioritaskan email jika mengandung '@'
+    // 1. Cek langsung jika identifier adalah ID user
+    if (this.users.has(clean)) {
+      return this.users.get(clean);
+    }
+
+    // 2. Prioritaskan email jika mengandung '@'
     if (clean.includes('@')) {
       return this.getUserByEmail(clean);
     }
 
-    // Jika mengandung deretan nomor handphone, cari berdasarkan nomor telepon
+    // 3. Jika mengandung deretan nomor handphone, cari berdasarkan nomor telepon
     const digitsOnly = clean.replace(/\D/g, '');
     if (digitsOnly.length >= 8) {
       const byPhone = this.getUserByPhone(clean);
       if (byPhone) return byPhone;
     }
 
-    // Fallback pencarian fleksibel
+    // 4. Fallback pencarian fleksibel
     return this.getUserByEmail(clean) || this.getUserByPhone(clean);
   }
 
@@ -503,11 +543,18 @@ class ServerStore {
   getWallets(userId: string): Wallet[] {
     let list = this.wallets.get(userId);
     if (!list || list.length === 0) {
-      const user = this.users.get(userId);
-      const isSuper = user?.role === 'superadmin' || user?.role === 'admin' || userId === 'usr_admin_999';
+      const resolvedUser = this.users.get(userId) || this.getUserByIdentifier(userId);
+      if (resolvedUser && resolvedUser.id !== userId) {
+        list = this.wallets.get(resolvedUser.id);
+      }
+    }
+    if (!list || list.length === 0) {
+      const user = this.users.get(userId) || this.getUserByIdentifier(userId);
+      const isSuper = user?.role === 'superadmin' || user?.role === 'admin' || userId === 'usr_admin_999' || user?.id === 'usr_admin_999';
+      const canonicalId = user?.id || userId;
       const fallbackWallet: Wallet = {
-        id: isSuper ? 'wal_admin_1' : `wal_${userId}_1`,
-        user_id: userId,
+        id: isSuper ? 'wal_admin_1' : `wal_${canonicalId}_1`,
+        user_id: canonicalId,
         name: isSuper ? 'Rekening Operasional Admin' : 'Dompet Utama',
         type: 'bank',
         balance: isSuper ? 50000000 : 1000000,
@@ -518,7 +565,8 @@ class ServerStore {
         updated_at: new Date().toISOString(),
       };
       list = [fallbackWallet];
-      this.wallets.set(userId, list);
+      this.wallets.set(canonicalId, list);
+      this.persist();
     }
     return list;
   }
@@ -543,7 +591,14 @@ class ServerStore {
 
   // Transactions
   getTransactions(userId: string): Transaction[] {
-    return this.transactions.get(userId) || [];
+    let list = this.transactions.get(userId);
+    if (!list || list.length === 0) {
+      const resolvedUser = this.users.get(userId) || this.getUserByIdentifier(userId);
+      if (resolvedUser && resolvedUser.id !== userId) {
+        list = this.transactions.get(resolvedUser.id);
+      }
+    }
+    return list || [];
   }
 
   addTransaction(tx: Omit<Transaction, 'id' | 'created_at'>): {
@@ -599,7 +654,14 @@ class ServerStore {
 
   // Budgets
   getBudgets(userId: string): Budget[] {
-    return this.budgets.get(userId) || [];
+    let list = this.budgets.get(userId);
+    if (!list || list.length === 0) {
+      const resolvedUser = this.users.get(userId) || this.getUserByIdentifier(userId);
+      if (resolvedUser && resolvedUser.id !== userId) {
+        list = this.budgets.get(resolvedUser.id);
+      }
+    }
+    return list || [];
   }
 
   setBudgets(userId: string, budgets: Budget[]): void {
@@ -609,7 +671,19 @@ class ServerStore {
 
   // Categories
   getCategories(userId: string): Category[] {
-    return this.categories.get(userId) || INITIAL_CATEGORIES;
+    let list = this.categories.get(userId);
+    if (!list || list.length === 0) {
+      const resolvedUser = this.users.get(userId) || this.getUserByIdentifier(userId);
+      if (resolvedUser && resolvedUser.id !== userId) {
+        list = this.categories.get(resolvedUser.id);
+      }
+    }
+    if (!list || list.length === 0) {
+      list = [...INITIAL_CATEGORIES];
+      this.categories.set(userId, list);
+      this.persist();
+    }
+    return list;
   }
 
   setCategories(userId: string, categories: Category[]): void {
