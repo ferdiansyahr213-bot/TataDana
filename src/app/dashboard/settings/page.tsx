@@ -801,8 +801,13 @@ export default function SettingsPage() {
 
               {/* Password Section */}
               <div className="pt-3 border-t border-slate-100">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                  Ganti Kata Sandi (Opsional)
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  <span>
+                    {user?.role === 'admin' || user?.role === 'superadmin' || user?.id === 'usr_admin_999'
+                      ? 'Ubah Kata Sandi Akun Admin'
+                      : 'Ganti Kata Sandi (Opsional)'}
+                  </span>
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
@@ -823,6 +828,11 @@ export default function SettingsPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
                 </div>
+                {(user?.role === 'admin' || user?.role === 'superadmin' || user?.id === 'usr_admin_999') && (
+                  <p className="text-[11px] text-slate-500 mt-2">
+                    Kata sandi baru login Admin akan disimpan permanen ke database dan langsung aktif untuk sesi login berikutnya.
+                  </p>
+                )}
               </div>
 
               {profileError && (

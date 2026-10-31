@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Mail, Smartphone, Lock, LogIn, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { Mail, Smartphone, Lock, LogIn, AlertCircle, Eye, EyeOff, HelpCircle, MessageCircle } from 'lucide-react';
 import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
 
 export default function LoginPage() {
@@ -25,6 +26,47 @@ export default function LoginPage() {
     email: string;
     phone?: string;
   } | null>(null);
+
+  // State untuk Fitur Lupa Kata Sandi
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [adminWaNumber, setAdminWaNumber] = useState<string>(
+    process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || '087730370324'
+  );
+
+  useEffect(() => {
+    fetch('/api/data?userId=usr_demo_123')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.settings?.admin_wa_number) {
+          setAdminWaNumber(data.settings.admin_wa_number);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleOpenForgotPassword = () => {
+    const currentInput = loginMethod === 'email' ? email.trim() : phone.trim();
+    if (currentInput) {
+      setForgotIdentifier(currentInput);
+    }
+    setShowForgotPasswordModal(true);
+  };
+
+  const handleContactAdminWA = () => {
+    const cleanId = forgotIdentifier.trim() || (loginMethod === 'email' ? email.trim() : phone.trim()) || '-';
+    const cleanPhone = (adminWaNumber || '087730370324').replace(/\D/g, '');
+    const standardPhone = cleanPhone.startsWith('0')
+      ? '62' + cleanPhone.slice(1)
+      : cleanPhone.startsWith('62')
+      ? cleanPhone
+      : '62' + cleanPhone;
+
+    const message = `Halo Admin *TataDana*,\n\nSaya mengalami kendala lupa kata sandi dan mohon bantuan untuk reset kata sandi akun saya.\n\n*Detail Akun Pengguna:*\n• Email / No. HP: ${cleanId}\n• Keperluan: Reset Kata Sandi\n\nMohon informasi kata sandi baru untuk akun saya. Terima kasih!`;
+
+    const waUrl = `https://wa.me/${standardPhone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,6 +304,16 @@ export default function LoginPage() {
               </button>
             </div>
 
+            <div className="flex justify-end -mt-2">
+              <button
+                type="button"
+                onClick={handleOpenForgotPassword}
+                className="text-[11px] font-semibold text-brand-600 hover:text-brand-800 hover:underline transition-colors"
+              >
+                Lupa Kata Sandi?
+              </button>
+            </div>
+
             <Button type="submit" variant="primary" className="w-full mt-2" isLoading={isLoading}>
               <LogIn className="w-4 h-4 mr-1.5" />
               <span>
@@ -335,6 +387,71 @@ export default function LoginPage() {
             router.push('/dashboard');
           }}
         />
+      )}
+
+      {/* Modal Bantuan Lupa Kata Sandi */}
+      {showForgotPasswordModal && (
+        <Modal
+          isOpen={showForgotPasswordModal}
+          onClose={() => setShowForgotPasswordModal(false)}
+          title="Bantuan Lupa Kata Sandi"
+          description="Kirim permohonan reset kata sandi langsung ke Admin TataDana via WhatsApp resmi."
+          maxWidth="md"
+        >
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                Email atau Nomor Handphone Akun Anda
+              </label>
+              <Input
+                type="text"
+                placeholder="Contoh: user@email.com atau 08123456789"
+                value={forgotIdentifier}
+                onChange={(e) => setForgotIdentifier(e.target.value)}
+                leftIcon={<HelpCircle className="w-4 h-4 text-slate-400" />}
+                required
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Data ini akan otomatis tercantum pada format pesan WhatsApp ke Admin.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-xs leading-relaxed space-y-1.5">
+              <span className="font-bold text-slate-800 block text-xs">Preview Pesan WhatsApp ke Admin:</span>
+              <div className="font-mono text-[11px] bg-white p-3 rounded-lg border border-slate-200 whitespace-pre-wrap text-slate-700 select-all leading-normal">
+{`Halo Admin *TataDana*,
+
+Saya mengalami kendala lupa kata sandi dan mohon bantuan untuk reset kata sandi akun saya.
+
+*Detail Akun Pengguna:*
+• Email / No. HP: ${forgotIdentifier.trim() || '[Isi otomatis dari input user]'}
+• Keperluan: Reset Kata Sandi
+
+Mohon informasi kata sandi baru untuk akun saya. Terima kasih!`}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowForgotPasswordModal(false)}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleContactAdminWA}
+                leftIcon={<MessageCircle className="w-4 h-4" />}
+              >
+                Hubungi Admin via WhatsApp
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

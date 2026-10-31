@@ -22,7 +22,8 @@ import {
   Activity,
   Eye,
   AlertTriangle,
-  Crown
+  Crown,
+  Settings
 } from 'lucide-react';
 import { UserProfile, UserApproval, PaymentRecord } from '@/lib/types';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase/client';
@@ -447,6 +448,19 @@ export default function AdminOverviewPage() {
               <div className="min-w-0">
                 <div className="font-bold text-slate-800 text-xs group-hover:text-amber-700 truncate">Audit Transaksi User</div>
                 <div className="text-[10px] text-slate-400 truncate">Akses audit support berizin</div>
+              </div>
+            </Link>
+
+            <Link
+              href="/dashboard/settings"
+              className="p-4 rounded-xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100 hover:border-slate-300 transition-all flex items-center gap-3 group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
+                <Settings className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-bold text-slate-800 text-xs group-hover:text-slate-900 truncate">Pengaturan Admin</div>
+                <div className="text-[10px] text-slate-400 truncate">Ubah sandi, kontak WA & profil</div>
               </div>
             </Link>
           </div>

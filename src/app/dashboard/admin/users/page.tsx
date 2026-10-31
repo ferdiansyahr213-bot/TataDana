@@ -7,6 +7,7 @@ import { AdminTabNav } from '@/components/admin/AdminTabNav';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { 
   Users, 
   Search, 
@@ -18,7 +19,11 @@ import {
   Zap, 
   Smartphone,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  KeyRound,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { UserProfile } from '@/lib/types';
 import { formatWIBDateTime } from '@/lib/utils/date-wib';
@@ -29,6 +34,50 @@ export default function AdminUsersManagementPage() {
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState<'all' | 'starter' | 'pro'>('all');
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  // State untuk Fitur Reset Sandi Pengguna
+  const [resettingUser, setResettingUser] = useState<UserProfile | null>(null);
+  const [newPasswordForUser, setNewPasswordForUser] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isSubmittingReset, setIsSubmittingReset] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleSaveResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resettingUser || !newPasswordForUser.trim()) return;
+    setIsSubmittingReset(true);
+    setResetError(null);
+
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reset_user_password',
+          payload: {
+            targetUserId: resettingUser.id,
+            newPassword: newPasswordForUser.trim(),
+          },
+          userId: 'usr_admin_999',
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setFeedback(`Kata sandi untuk ${resettingUser.full_name} berhasil direset secara permanen!`);
+        setResettingUser(null);
+        setNewPasswordForUser('');
+        setTimeout(() => setFeedback(null), 3500);
+        loadUsers();
+      } else {
+        setResetError(data.error || 'Gagal mereset kata sandi.');
+      }
+    } catch (err: any) {
+      setResetError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsSubmittingReset(false);
+    }
+  };
 
   const loadUsers = async () => {
     setLoading(true);
@@ -325,15 +374,31 @@ export default function AdminUsersManagementPage() {
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        <Button
-                          onClick={() => handleImpersonate(u)}
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-200 hover:bg-purple-50 hover:text-purple-700 text-slate-700 text-xs rounded-xl py-1 px-2.5"
-                          leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
-                        >
-                          Masuk Sebagai User
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            onClick={() => {
+                              setResettingUser(u);
+                              setNewPasswordForUser('');
+                              setShowNewPassword(false);
+                              setResetError(null);
+                            }}
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-200 bg-amber-50/50 hover:bg-amber-100 hover:text-amber-800 text-amber-700 text-xs rounded-xl py-1 px-2.5 shadow-2xs"
+                            leftIcon={<KeyRound className="w-3.5 h-3.5 text-amber-600" />}
+                          >
+                            Reset Sandi
+                          </Button>
+                          <Button
+                            onClick={() => handleImpersonate(u)}
+                            size="sm"
+                            variant="outline"
+                            className="border-slate-200 hover:bg-purple-50 hover:text-purple-700 text-slate-700 text-xs rounded-xl py-1 px-2.5"
+                            leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
+                          >
+                            Masuk Sebagai User
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -348,6 +413,89 @@ export default function AdminUsersManagementPage() {
           )}
         </div>
       </div>
+
+      {/* Modal Reset Kata Sandi Pengguna */}
+      {resettingUser && (
+        <Modal
+          isOpen={Boolean(resettingUser)}
+          onClose={() => setResettingUser(null)}
+          title="Reset Kata Sandi Pengguna"
+          description={`Ubah kata sandi akun ${resettingUser.full_name} secara permanen di database.`}
+          maxWidth="md"
+        >
+          <form onSubmit={handleSaveResetPassword} className="space-y-4 pt-2">
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Nama Pengguna:</span>
+                <span className="font-bold text-slate-800">{resettingUser.full_name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Email:</span>
+                <span className="font-mono text-slate-700">{resettingUser.email || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">No. Handphone:</span>
+                <span className="font-mono text-slate-700">{resettingUser.phone_number || '-'}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                Kata Sandi Baru Pengguna
+              </label>
+              <div className="relative">
+                <Input
+                  type={showNewPassword ? 'text' : 'password'}
+                  placeholder="Masukkan kata sandi baru (min. 4 karakter)"
+                  value={newPasswordForUser}
+                  onChange={(e) => setNewPasswordForUser(e.target.value)}
+                  leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3.5 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                  title={showNewPassword ? 'Sembunyikan' : 'Lihat sandi'}
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Kata sandi baru akan langsung disimpan permanen di database dan pengguna dapat langsung menggunakannya untuk login.
+              </p>
+            </div>
+
+            {resetError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {resetError}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                disabled={isSubmittingReset}
+                onClick={() => setResettingUser(null)}
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                isLoading={isSubmittingReset}
+                disabled={!newPasswordForUser.trim() || newPasswordForUser.trim().length < 4}
+                leftIcon={<KeyRound className="w-4 h-4" />}
+              >
+                Simpan Sandi Baru
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

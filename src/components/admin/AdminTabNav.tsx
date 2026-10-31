@@ -10,7 +10,8 @@ import {
   Users, 
   Cpu, 
   Activity, 
-  Eye 
+  Eye,
+  Settings
 } from 'lucide-react';
 
 export const AdminTabNav: React.FC<{
@@ -39,6 +40,7 @@ export const AdminTabNav: React.FC<{
     { label: 'AI Provider', href: '/dashboard/admin/ai-providers', icon: Cpu },
     { label: 'Log AI', href: '/dashboard/admin/ai-logs', icon: Activity },
     { label: 'Audit Transaksi', href: '/dashboard/admin/transactions', icon: Eye },
+    { label: 'Pengaturan Admin', href: '/dashboard/settings', icon: Settings },
   ];
 
   return (

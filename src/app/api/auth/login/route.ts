@@ -29,16 +29,16 @@ export async function POST(req: NextRequest) {
       'ferdiansyahr213@gmail.com'
     ).toLowerCase().trim();
 
+    const existingAdmin = serverStore.users.get('usr_admin_999') || Array.from(serverStore.users.values()).find(u => u.role === 'superadmin');
     const envAdminPassword = process.env.ADMIN_PASSWORD?.trim();
     const validAdminPasswords = [
+      existingAdmin?.password,
       envAdminPassword,
       'AdminTataDana123!',
       'Vina2007',
       'Vina1234',
       'admin123',
     ].filter(Boolean) as string[];
-
-    const existingAdmin = serverStore.users.get('usr_admin_999');
     const adminSavedPhone = existingAdmin?.phone_number || 
       serverStore.getSetting('admin_wa_number') || 
       process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || 

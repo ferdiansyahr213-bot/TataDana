@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { serverStore } from '@/lib/supabase/server';
 import { getCurrentMonthPeriodWIB } from '@/lib/utils/date-wib';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase/client';
-import { normalizePhoneNumber, checkUserDuplicateInDb } from '@/lib/storage/local-db';
+import { normalizePhoneNumber, checkUserDuplicateInDb, getSqliteDb } from '@/lib/storage/local-db';
 import type { Category } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action, payload, userId } = body;
     const effectiveUserId = userId || 'usr_demo_123';
-    const user = serverStore.users.get(effectiveUserId);
+    let user = serverStore.users.get(effectiveUserId) || serverStore.getUserByIdentifier(effectiveUserId);
 
     if (action === 'register_user') {
       const { fullName, phone, email, password } = payload || {};
@@ -377,25 +377,93 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'update_profile') {
-      Object.assign(user, payload);
-      user.updated_at = new Date().toISOString();
+      if (!user) {
+        user = serverStore.users.get('usr_admin_999') || Array.from(serverStore.users.values())[0];
+      }
 
-      // If user is admin/superadmin, keep system-wide admin contact settings in sync
-      if (user.role === 'admin' || user.role === 'superadmin' || user.id === 'usr_admin_999') {
-        if (payload.phone_number) {
-          serverStore.setSetting('admin_wa_number', payload.phone_number);
-          serverStore.setSetting('admin_phone_number', payload.phone_number);
+      if (user) {
+        Object.assign(user, payload);
+        user.updated_at = new Date().toISOString();
+
+        if (payload.password) {
+          user.password = payload.password;
+          try {
+            const db = getSqliteDb();
+            if (db) {
+              db.prepare('UPDATE users SET password = ?, updated_at = ? WHERE id = ?').run(
+                payload.password,
+                user.updated_at,
+                user.id
+              );
+            }
+          } catch (e: any) {
+            console.warn('[update_profile] SQLite direct update notice:', e.message);
+          }
         }
-        if (payload.email) {
-          serverStore.setSetting('admin_email', payload.email);
+
+        // If user is admin/superadmin, keep system-wide admin contact settings in sync
+        if (user.role === 'admin' || user.role === 'superadmin' || user.id === 'usr_admin_999') {
+          if (payload.phone_number) {
+            serverStore.setSetting('admin_wa_number', payload.phone_number);
+            serverStore.setSetting('admin_phone_number', payload.phone_number);
+          }
+          if (payload.email) {
+            serverStore.setSetting('admin_email', payload.email);
+          }
         }
+
+        serverStore.persist();
+        return NextResponse.json({ 
+          ok: true, 
+          user, 
+          settings: Object.fromEntries(serverStore.settings.entries()) 
+        });
+      }
+
+      return NextResponse.json({ ok: false, error: 'Pengguna tidak ditemukan' }, { status: 404 });
+    }
+
+    if (action === 'reset_user_password') {
+      const { targetUserId, newPassword } = payload || {};
+      if (!targetUserId || !newPassword) {
+        return NextResponse.json({ ok: false, error: 'ID Pengguna dan kata sandi baru wajib disertakan' }, { status: 400 });
+      }
+
+      const cleanPassword = String(newPassword).trim();
+      if (cleanPassword.length < 4) {
+        return NextResponse.json({ ok: false, error: 'Kata sandi minimal 4 karakter' }, { status: 400 });
+      }
+
+      const targetUser = serverStore.users.get(targetUserId) || serverStore.getUserByIdentifier(targetUserId);
+      if (!targetUser) {
+        return NextResponse.json({ ok: false, error: 'Pengguna tidak ditemukan' }, { status: 404 });
+      }
+
+      targetUser.password = cleanPassword;
+      targetUser.updated_at = new Date().toISOString();
+
+      try {
+        const db = getSqliteDb();
+        if (db) {
+          db.prepare('UPDATE users SET password = ?, updated_at = ? WHERE id = ?').run(
+            cleanPassword,
+            targetUser.updated_at,
+            targetUser.id
+          );
+        }
+      } catch (err: any) {
+        console.warn('[reset_user_password] SQLite direct update notice:', err.message);
       }
 
       serverStore.persist();
-      return NextResponse.json({ 
-        ok: true, 
-        user, 
-        settings: Object.fromEntries(serverStore.settings.entries()) 
+      return NextResponse.json({
+        ok: true,
+        message: `Kata sandi untuk ${targetUser.full_name} berhasil direset secara permanen.`,
+        user: {
+          id: targetUser.id,
+          full_name: targetUser.full_name,
+          email: targetUser.email,
+        }
       });
     }
 
@@ -476,16 +544,16 @@ export async function POST(req: NextRequest) {
         'ferdiansyahr213@gmail.com'
       ).toLowerCase().trim();
 
+      const existingAdmin = serverStore.users.get('usr_admin_999') || Array.from(serverStore.users.values()).find(u => u.role === 'superadmin');
       const envAdminPassword = process.env.ADMIN_PASSWORD?.trim();
       const validAdminPasswords = [
+        existingAdmin?.password,
         envAdminPassword,
         'AdminTataDana123!',
         'Vina2007',
         'Vina1234',
         'admin123',
       ].filter(Boolean) as string[];
-
-      const existingAdmin = serverStore.users.get('usr_admin_999');
       const adminSavedPhone = existingAdmin?.phone_number || serverStore.getSetting('admin_wa_number') || process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || process.env.NEXT_PUBLIC_ADMIN_WA || '087730370324';
       const adminPhoneDigits = adminSavedPhone.replace(/\D/g, '');
 
