@@ -17,6 +17,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<'email' | 'phone' | null>(null);
 
   // State to hold registered user data when waiting for approval
   const [pendingUser, setPendingUser] = useState<{
@@ -30,40 +31,14 @@ export default function RegisterPage() {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage(null);
+    setErrorField(null);
 
     const cleanName = fullName.trim();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
 
     try {
-      // 1. Simpan ke database persisten lokal TataDana (SQLite & ServerStore)
-      let approvalId = `appr_${Date.now()}`;
-
-      // Mirror ke live Supabase jika credentials aktif
-      if (isLiveSupabaseConfigured()) {
-        try {
-          const { data: insertedApproval } = await supabase
-            .from('user_approvals')
-            .insert([
-              {
-                full_name: cleanName,
-                email: cleanEmail,
-                phone_number: cleanPhone,
-                status: 'pending',
-              },
-            ])
-            .select()
-            .maybeSingle();
-
-          if (insertedApproval?.id) {
-            approvalId = insertedApproval.id;
-          }
-        } catch (sbErr) {
-          console.warn('Supabase direct insert handled:', sbErr);
-        }
-      }
-
-      // 2. Daftarkan akun baru secara permanen di backend
+      // 1. Daftarkan akun baru ke backend (Validasi Duplikasi Email & No. HP)
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,17 +54,18 @@ export default function RegisterPage() {
       });
 
       const data = await res.json();
+
       if (!res.ok || !data.ok) {
+        if (data.field === 'email' || data.field === 'phone') {
+          setErrorField(data.field);
+        }
         throw new Error(data.error || 'Gagal menyimpan pendaftaran.');
       }
 
-      if (data.user?.id) {
-        approvalId = data.user.id;
-      }
-
+      const approvalId = data.user?.id || `appr_${Date.now()}`;
       setIsLoading(false);
 
-      // 3. Arahkan pengguna ke tampilan menunggu persetujuan yang berisi tautan WhatsApp ke admin
+      // 2. Arahkan pengguna ke modal menunggu persetujuan
       setPendingUser({
         id: approvalId,
         fullName: cleanName,
@@ -170,7 +146,11 @@ export default function RegisterPage() {
               placeholder="contoh: 081234567890"
               leftIcon={<Smartphone className="w-4 h-4" />}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (errorField === 'phone') setErrorField(null);
+              }}
+              error={errorField === 'phone' ? 'Nomor handphone ini sudah terdaftar' : undefined}
               required
               helperText="Digunakan untuk konfirmasi persetujuan admin & integrasi Telegram."
             />
@@ -181,7 +161,11 @@ export default function RegisterPage() {
               placeholder="nama@email.com"
               leftIcon={<Mail className="w-4 h-4" />}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (errorField === 'email') setErrorField(null);
+              }}
+              error={errorField === 'email' ? 'Email ini sudah terdaftar' : undefined}
               required
             />
 

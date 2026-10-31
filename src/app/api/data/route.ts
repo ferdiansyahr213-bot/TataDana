@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { serverStore } from '@/lib/supabase/server';
 import { getCurrentMonthPeriodWIB } from '@/lib/utils/date-wib';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase/client';
+import { normalizePhoneNumber, checkUserDuplicateInDb } from '@/lib/storage/local-db';
 import type { Category } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
@@ -36,61 +37,80 @@ export async function POST(req: NextRequest) {
 
     if (action === 'register_user') {
       const { fullName, phone, email, password } = payload || {};
+      const cleanName = (fullName || '').trim();
       const cleanEmail = (email || '').trim().toLowerCase();
-      const cleanPhone = (phone || '').replace(/\D/g, '');
+      const stdPhone = normalizePhoneNumber(phone);
 
-      if (!cleanEmail || !password || !fullName) {
+      if (!cleanName || !password || !cleanEmail || !stdPhone) {
         return NextResponse.json({ ok: false, error: 'Semua kolom pendaftaran wajib diisi' }, { status: 400 });
       }
 
-      // Check if user already exists
-      const existingUser = serverStore.getUserByEmail(cleanEmail) || (cleanPhone ? serverStore.getUserByPhone(cleanPhone) : undefined);
-      if (existingUser) {
-        if (existingUser.verification_status === 'verified') {
-          return NextResponse.json({ ok: false, error: 'Email atau nomor telepon ini sudah terdaftar. Silakan masuk.' }, { status: 400 });
+      // 1. Pengecekan Duplikasi Email
+      const emailDup = serverStore.getUserByEmail(cleanEmail) || checkUserDuplicateInDb(cleanEmail, undefined).isDuplicate;
+      if (emailDup) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Email ini sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda.',
+            field: 'email',
+          },
+          { status: 409 }
+        );
+      }
+
+      // 2. Pengecekan Duplikasi Nomor Handphone (Format 08... dan +628...)
+      const phoneDup = serverStore.getUserByPhone(stdPhone) || checkUserDuplicateInDb(undefined, stdPhone).isDuplicate;
+      if (phoneDup) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Nomor handphone ini sudah terdaftar. Silakan gunakan nomor lain atau masuk ke akun Anda.',
+            field: 'phone',
+          },
+          { status: 409 }
+        );
+      }
+
+      // 3. Simpan akun baru
+      try {
+        const newUser = serverStore.registerNewUser({
+          fullName: cleanName,
+          phone: stdPhone,
+          email: cleanEmail,
+          password,
+        });
+
+        // If live Supabase is active, mirror to Supabase
+        if (isLiveSupabaseConfigured()) {
+          try {
+            await supabase.from('user_approvals').insert([
+              {
+                full_name: newUser.full_name,
+                email: newUser.email,
+                phone_number: newUser.phone_number,
+                status: newUser.verification_status === 'verified' ? 'approved' : 'pending',
+              },
+            ]);
+          } catch (sbErr) {
+            console.warn('[API Data] Live Supabase mirror notice:', sbErr);
+          }
         }
-        // If already exists but pending, return user info for approval
+
         return NextResponse.json({
           ok: true,
-          status: 'pending',
-          message: 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.',
-          user: existingUser,
+          status: newUser.verification_status,
+          message: newUser.verification_status === 'pending'
+            ? 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.'
+            : 'Pendaftaran akun berhasil!',
+          user: newUser,
+          approvals: Array.from(serverStore.userApprovals.values()),
         });
+      } catch (err: any) {
+        return NextResponse.json(
+          { ok: false, error: err.message || 'Gagal menyimpan pendaftaran.' },
+          { status: 409 }
+        );
       }
-
-      // Create new user with status 'pending' (or 'verified' if superadmin)
-      const newUser = serverStore.registerNewUser({
-        fullName,
-        phone,
-        email: cleanEmail,
-        password,
-      });
-
-      // If live Supabase is active, mirror to Supabase
-      if (isLiveSupabaseConfigured()) {
-        try {
-          await supabase.from('user_approvals').insert([
-            {
-              full_name: newUser.full_name,
-              email: newUser.email,
-              phone_number: newUser.phone_number,
-              status: newUser.verification_status === 'verified' ? 'approved' : 'pending',
-            },
-          ]);
-        } catch (sbErr) {
-          console.warn('[API Data] Live Supabase mirror notice:', sbErr);
-        }
-      }
-
-      return NextResponse.json({
-        ok: true,
-        status: newUser.verification_status,
-        message: newUser.verification_status === 'pending'
-          ? 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.'
-          : 'Pendaftaran akun berhasil!',
-        user: newUser,
-        approvals: Array.from(serverStore.userApprovals.values()),
-      });
     }
 
     if (!user) {

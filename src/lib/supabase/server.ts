@@ -8,7 +8,10 @@ import {
   INITIAL_BUDGETS, INITIAL_TRANSACTIONS, INITIAL_AI_PROVIDERS, 
   INITIAL_AI_SETTINGS, INITIAL_AI_LOGS, INITIAL_PAYMENTS, INITIAL_EXPORTS 
 } from './dev-storage';
-import { loadLocalDatabase, saveLocalDatabase, PersistentDataSnapshot, setAppSetting } from '../storage/local-db';
+import { 
+  loadLocalDatabase, saveLocalDatabase, PersistentDataSnapshot, 
+  setAppSetting, normalizePhoneNumber, checkUserDuplicateInDb 
+} from '../storage/local-db';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock-tatadana.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'mock-service-role';
@@ -290,20 +293,28 @@ class ServerStore {
     return undefined;
   }
 
-  // Register or create new user profile with initial structure
+  // Register or create new user profile with strict duplicate prevention
   registerNewUser(params: { fullName: string; phone: string; email?: string; password?: string }): UserProfile {
-    const cleanPhone = (params.phone || '').replace(/\D/g, '');
-    const cleanEmail = params.email ? params.email.trim().toLowerCase() : `${cleanPhone}@tatadana.id`;
+    const stdPhone = normalizePhoneNumber(params.phone);
+    const cleanEmail = params.email ? params.email.trim().toLowerCase() : (stdPhone ? `${stdPhone}@tatadana.id` : '');
 
-    // Check existing by email or phone
-    const existing = this.getUserByEmail(cleanEmail) || (cleanPhone ? this.getUserByPhone(cleanPhone) : undefined);
-    if (existing) {
-      existing.full_name = params.fullName || existing.full_name;
-      if (params.email) existing.email = cleanEmail;
-      if (params.password) existing.password = params.password;
-      existing.updated_at = new Date().toISOString();
-      this.persist();
-      return existing;
+    if (!cleanEmail) {
+      throw new Error('Email wajib diisi untuk pendaftaran akun.');
+    }
+    if (!stdPhone) {
+      throw new Error('Nomor handphone wajib diisi untuk pendaftaran akun.');
+    }
+
+    // 1. Strict duplicate validation on Email
+    const emailDup = this.getUserByEmail(cleanEmail) || checkUserDuplicateInDb(cleanEmail, undefined).isDuplicate;
+    if (emailDup) {
+      throw new Error('Email ini sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda.');
+    }
+
+    // 2. Strict duplicate validation on Phone
+    const phoneDup = this.getUserByPhone(stdPhone) || checkUserDuplicateInDb(undefined, stdPhone).isDuplicate;
+    if (phoneDup) {
+      throw new Error('Nomor handphone ini sudah terdaftar. Silakan gunakan nomor lain atau masuk ke akun Anda.');
     }
 
     const newUserId = `usr_${Date.now()}`;
@@ -313,7 +324,7 @@ class ServerStore {
     const newUser: UserProfile = {
       id: newUserId,
       full_name: params.fullName,
-      phone_number: params.phone,
+      phone_number: stdPhone,
       email: cleanEmail,
       password: params.password,
       currency: 'IDR',

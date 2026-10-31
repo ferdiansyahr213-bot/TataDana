@@ -168,12 +168,89 @@ export function getSqliteDb(): any {
       }
     }
 
+    // Ensure UNIQUE indexes exist on email and phone_number
+    try {
+      db.exec(`
+        DELETE FROM users 
+        WHERE rowid NOT IN (
+          SELECT MIN(rowid) FROM users GROUP BY email
+        ) AND email IS NOT NULL AND email != '';
+
+        DELETE FROM users 
+        WHERE rowid NOT IN (
+          SELECT MIN(rowid) FROM users GROUP BY phone_number
+        ) AND phone_number IS NOT NULL AND phone_number != '';
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL AND email != '';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone_number) WHERE phone_number IS NOT NULL AND phone_number != '';
+      `);
+    } catch (idxErr: any) {
+      console.warn('[Local Persistence] Index creation notice:', idxErr.message);
+    }
+
     cachedSqliteDb = db;
     return db;
   } catch (err: any) {
     console.warn('[Local Persistence] ℹ️ SQLite native module notice:', err.message);
     return null;
   }
+}
+
+/**
+ * Normalisasi format nomor handphone standar Indonesia (awalan 08...)
+ */
+export function normalizePhoneNumber(phone?: string | null): string {
+  if (!phone) return '';
+  let clean = phone.replace(/\D/g, '');
+  if (!clean) return '';
+  if (clean.startsWith('62')) {
+    clean = '0' + clean.slice(2);
+  } else if (!clean.startsWith('0')) {
+    clean = '0' + clean;
+  }
+  return clean;
+}
+
+/**
+ * Pengecekan duplikasi email dan nomor handphone langsung di SQLite
+ */
+export function checkUserDuplicateInDb(email?: string, phone?: string): { isDuplicate: boolean; field?: 'email' | 'phone'; message?: string } {
+  try {
+    const db = getSqliteDb();
+    if (db) {
+      if (email && email.trim()) {
+        const cleanEmail = email.trim().toLowerCase();
+        const row = db.prepare('SELECT id FROM users WHERE LOWER(TRIM(email)) = ?').get(cleanEmail);
+        if (row) {
+          return {
+            isDuplicate: true,
+            field: 'email',
+            message: 'Email ini sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda.',
+          };
+        }
+      }
+
+      if (phone && phone.trim()) {
+        const stdPhone = normalizePhoneNumber(phone);
+        const rawDigits = phone.replace(/\D/g, '');
+        const rows = db.prepare("SELECT id, phone_number FROM users WHERE phone_number IS NOT NULL AND phone_number != ''").all() as any[];
+        for (const r of rows) {
+          const userStd = normalizePhoneNumber(r.phone_number);
+          if (userStd === stdPhone || (rawDigits.length >= 8 && r.phone_number.replace(/\D/g, '').endsWith(rawDigits.slice(-9)))) {
+            return {
+              isDuplicate: true,
+              field: 'phone',
+              message: 'Nomor handphone ini sudah terdaftar. Silakan gunakan nomor lain atau masuk ke akun Anda.',
+            };
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Local Persistence] Duplicate check notice:', e.message);
+  }
+
+  return { isDuplicate: false };
 }
 
 /**

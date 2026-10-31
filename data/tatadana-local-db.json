@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-10-31T01:50:34.263Z",
+  "last_updated": "2026-10-31T02:02:21.229Z",
   "users": [
     [
       "usr_demo_123",
@@ -189,14 +189,14 @@
       "usr_1793411433331",
       {
         "id": "usr_1793411433331",
+        "email": "user.hp.test@tatadana.id",
         "full_name": "Joko Pengguna HP",
         "phone_number": "085211223344",
-        "email": "user.hp.test@tatadana.id",
+        "role": "user",
+        "plan": "starter",
+        "verification_status": "verified",
         "password": "RahasiaHP123!",
         "currency": "IDR",
-        "role": "user",
-        "verification_status": "verified",
-        "plan": "starter",
         "telegram_connected": false,
         "reminder_enabled": true,
         "reminder_frequency": 1,
@@ -205,6 +205,50 @@
         "onboarding_completed": false,
         "created_at": "2026-10-31T01:50:33.331Z",
         "updated_at": "2026-10-31T01:50:33.680Z"
+      }
+    ],
+    [
+      "usr_1793411947033",
+      {
+        "id": "usr_1793411947033",
+        "email": "valid.first.1793411947030@tatadana.id",
+        "full_name": "Pengguna Pertama",
+        "phone_number": "081277665544",
+        "role": "user",
+        "plan": "starter",
+        "verification_status": "pending",
+        "password": "PasswordValid123!",
+        "currency": "IDR",
+        "telegram_connected": false,
+        "reminder_enabled": true,
+        "reminder_frequency": 1,
+        "reminder_time_1": "09:00:00",
+        "reminder_time_2": "20:00:00",
+        "onboarding_completed": false,
+        "created_at": "2026-10-31T01:59:07.033Z",
+        "updated_at": "2026-10-31T01:59:07.033Z"
+      }
+    ],
+    [
+      "usr_1793412141228",
+      {
+        "id": "usr_1793412141228",
+        "full_name": "Pengguna Pertama",
+        "phone_number": "08412141225",
+        "email": "valid.first.1793412141225@tatadana.id",
+        "password": "PasswordValid123!",
+        "currency": "IDR",
+        "role": "user",
+        "verification_status": "pending",
+        "plan": "starter",
+        "telegram_connected": false,
+        "reminder_enabled": true,
+        "reminder_frequency": 1,
+        "reminder_time_1": "09:00:00",
+        "reminder_time_2": "20:00:00",
+        "onboarding_completed": false,
+        "created_at": "2026-10-31T02:02:21.228Z",
+        "updated_at": "2026-10-31T02:02:21.228Z"
       }
     ]
   ],
@@ -332,6 +376,40 @@
           "icon": "landmark",
           "created_at": "2026-10-31T01:50:33.331Z",
           "updated_at": "2026-10-31T01:50:33.331Z"
+        }
+      ]
+    ],
+    [
+      "usr_1793411947033",
+      [
+        {
+          "id": "wal_1793411947034_1",
+          "user_id": "usr_1793411947033",
+          "name": "Dompet Utama (BCA)",
+          "type": "bank",
+          "balance": 1000000,
+          "is_default": true,
+          "color": "#0284c7",
+          "icon": "landmark",
+          "created_at": "2026-10-31T01:59:07.034Z",
+          "updated_at": "2026-10-31T01:59:07.034Z"
+        }
+      ]
+    ],
+    [
+      "usr_1793412141228",
+      [
+        {
+          "id": "wal_1793412141228_1",
+          "user_id": "usr_1793412141228",
+          "name": "Dompet Utama (BCA)",
+          "type": "bank",
+          "balance": 1000000,
+          "is_default": true,
+          "color": "#0284c7",
+          "icon": "landmark",
+          "created_at": "2026-10-31T02:02:21.228Z",
+          "updated_at": "2026-10-31T02:02:21.228Z"
         }
       ]
     ]
@@ -846,6 +924,176 @@
           "is_custom": false
         }
       ]
+    ],
+    [
+      "usr_1793411947033",
+      [
+        {
+          "id": "cat_1",
+          "name": "Makanan & Minuman",
+          "type": "expense",
+          "emoji": "🍜",
+          "color": "#f97316",
+          "is_custom": false
+        },
+        {
+          "id": "cat_2",
+          "name": "Transportasi",
+          "type": "expense",
+          "emoji": "🚗",
+          "color": "#0284c7",
+          "is_custom": false
+        },
+        {
+          "id": "cat_3",
+          "name": "Hiburan",
+          "type": "expense",
+          "emoji": "🎮",
+          "color": "#8b5cf6",
+          "is_custom": false
+        },
+        {
+          "id": "cat_4",
+          "name": "Tagihan & Utilitas",
+          "type": "expense",
+          "emoji": "🏠",
+          "color": "#ef4444",
+          "is_custom": false
+        },
+        {
+          "id": "cat_5",
+          "name": "Kesehatan",
+          "type": "expense",
+          "emoji": "💊",
+          "color": "#10b981",
+          "is_custom": false
+        },
+        {
+          "id": "cat_6",
+          "name": "Belanja",
+          "type": "expense",
+          "emoji": "👕",
+          "color": "#ec4899",
+          "is_custom": false
+        },
+        {
+          "id": "cat_7",
+          "name": "Pendidikan",
+          "type": "expense",
+          "emoji": "📚",
+          "color": "#f59e0b",
+          "is_custom": false
+        },
+        {
+          "id": "cat_8",
+          "name": "Gaji",
+          "type": "income",
+          "emoji": "💼",
+          "color": "#10b981",
+          "is_custom": false
+        },
+        {
+          "id": "cat_9",
+          "name": "Bonus & Freelance",
+          "type": "income",
+          "emoji": "💰",
+          "color": "#f97316",
+          "is_custom": false
+        },
+        {
+          "id": "cat_10",
+          "name": "Investasi & Dividen",
+          "type": "income",
+          "emoji": "📈",
+          "color": "#6366f1",
+          "is_custom": false
+        }
+      ]
+    ],
+    [
+      "usr_1793412141228",
+      [
+        {
+          "id": "cat_1",
+          "name": "Makanan & Minuman",
+          "type": "expense",
+          "emoji": "🍜",
+          "color": "#f97316",
+          "is_custom": false
+        },
+        {
+          "id": "cat_2",
+          "name": "Transportasi",
+          "type": "expense",
+          "emoji": "🚗",
+          "color": "#0284c7",
+          "is_custom": false
+        },
+        {
+          "id": "cat_3",
+          "name": "Hiburan",
+          "type": "expense",
+          "emoji": "🎮",
+          "color": "#8b5cf6",
+          "is_custom": false
+        },
+        {
+          "id": "cat_4",
+          "name": "Tagihan & Utilitas",
+          "type": "expense",
+          "emoji": "🏠",
+          "color": "#ef4444",
+          "is_custom": false
+        },
+        {
+          "id": "cat_5",
+          "name": "Kesehatan",
+          "type": "expense",
+          "emoji": "💊",
+          "color": "#10b981",
+          "is_custom": false
+        },
+        {
+          "id": "cat_6",
+          "name": "Belanja",
+          "type": "expense",
+          "emoji": "👕",
+          "color": "#ec4899",
+          "is_custom": false
+        },
+        {
+          "id": "cat_7",
+          "name": "Pendidikan",
+          "type": "expense",
+          "emoji": "📚",
+          "color": "#f59e0b",
+          "is_custom": false
+        },
+        {
+          "id": "cat_8",
+          "name": "Gaji",
+          "type": "income",
+          "emoji": "💼",
+          "color": "#10b981",
+          "is_custom": false
+        },
+        {
+          "id": "cat_9",
+          "name": "Bonus & Freelance",
+          "type": "income",
+          "emoji": "💰",
+          "color": "#f97316",
+          "is_custom": false
+        },
+        {
+          "id": "cat_10",
+          "name": "Investasi & Dividen",
+          "type": "income",
+          "emoji": "📈",
+          "color": "#6366f1",
+          "is_custom": false
+        }
+      ]
     ]
   ],
   "budgets": [
@@ -924,6 +1172,14 @@
     ],
     [
       "usr_1793411433331",
+      []
+    ],
+    [
+      "usr_1793411947033",
+      []
+    ],
+    [
+      "usr_1793412141228",
       []
     ]
   ],
@@ -1325,6 +1581,14 @@
     [
       "usr_1793411433331",
       []
+    ],
+    [
+      "usr_1793411947033",
+      []
+    ],
+    [
+      "usr_1793412141228",
+      []
     ]
   ],
   "payments": [
@@ -1547,6 +1811,24 @@
       "status": "approved",
       "created_at": "2026-10-31T01:50:33.331Z",
       "updated_at": "2026-10-31T01:50:33.680Z"
+    },
+    {
+      "id": "appr_usr_1793411947033",
+      "full_name": "Pengguna Pertama",
+      "email": "valid.first.1793411947030@tatadana.id",
+      "phone_number": "081277665544",
+      "status": "pending",
+      "created_at": "2026-10-31T01:59:07.033Z",
+      "updated_at": "2026-10-31T01:59:07.033Z"
+    },
+    {
+      "id": "appr_usr_1793412141228",
+      "full_name": "Pengguna Pertama",
+      "email": "valid.first.1793412141225@tatadana.id",
+      "phone_number": "08412141225",
+      "status": "pending",
+      "created_at": "2026-10-31T02:02:21.228Z",
+      "updated_at": "2026-10-31T02:02:21.228Z"
     }
   ]
 }
