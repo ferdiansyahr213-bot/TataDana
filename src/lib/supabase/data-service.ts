@@ -558,47 +558,54 @@ export async function insertUserApproval(params: {
 }
 
 /**
- * 10. Fetch data pendaftar dari tabel `user_approvals` di Supabase secara langsung
+ * 10. Fetch data pendaftar dari tabel `user_approvals` (Supabase atau SQLite backend)
  */
 export async function fetchUserApprovals(statusFilter?: 'pending' | 'approved' | 'rejected' | 'all'): Promise<UserApproval[]> {
-  try {
-    let query = supabase
-      .from('user_approvals')
-      .select('*')
-      .order('created_at', { ascending: false });
+  if (isLiveSupabaseConfigured()) {
+    try {
+      let query = supabase
+        .from('user_approvals')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (statusFilter && statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
-    }
+      if (statusFilter && statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
 
-    const { data, error } = await query;
-    if (!error && Array.isArray(data) && data.length > 0) {
-      return data as UserApproval[];
+      const { data, error } = await query;
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data as UserApproval[];
+      }
+    } catch (err) {
+      console.warn('Supabase fetchUserApprovals direct notice:', err);
     }
-  } catch (err) {
-    console.warn('Supabase fetchUserApprovals direct notice:', err);
   }
 
-  // Fallback sinkronisasi dari serverStore jika Supabase offline/mock lokal
+  // Sinkronisasi dari backend persisten (SQLite / tatadana-local-db.json)
   try {
     const res = await fetch('/api/data?userId=usr_admin_999');
     const json = await res.json();
-    if (json.ok && Array.isArray(json.allUsers)) {
-      const mapped: UserApproval[] = json.allUsers
-        .filter((u: any) => u.role !== 'admin' && u.role !== 'superadmin')
-        .map((u: any) => ({
-          id: u.id,
-          full_name: u.full_name,
-          email: u.email || '',
-          phone_number: u.phone_number || '',
-          status: (u.verification_status === 'verified' ? 'approved' : u.verification_status || 'pending') as any,
-          created_at: u.created_at || new Date().toISOString(),
-        }));
+    if (json.ok) {
+      let list: UserApproval[] = [];
+      if (Array.isArray(json.userApprovals) && json.userApprovals.length > 0) {
+        list = json.userApprovals;
+      } else if (Array.isArray(json.allUsers)) {
+        list = json.allUsers
+          .filter((u: any) => u.role !== 'admin' && u.role !== 'superadmin')
+          .map((u: any) => ({
+            id: u.id,
+            full_name: u.full_name,
+            email: u.email || '',
+            phone_number: u.phone_number || '',
+            status: (u.verification_status === 'verified' ? 'approved' : u.verification_status || 'pending') as any,
+            created_at: u.created_at || new Date().toISOString(),
+          }));
+      }
 
       if (statusFilter && statusFilter !== 'all') {
-        return mapped.filter(item => item.status === statusFilter);
+        return list.filter(item => item.status === statusFilter);
       }
-      return mapped;
+      return list;
     }
   } catch (e) {
     // ignore

@@ -32,7 +32,7 @@ export const INITIAL_ADMIN: UserProfile = {
   id: 'usr_admin_999',
   email: 'ferdiansyahr213@gmail.com',
   full_name: 'Administrator TataDana',
-  phone_number: '081234567890',
+  phone_number: process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || process.env.NEXT_PUBLIC_ADMIN_WA || '087730370324',
   avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
   currency: 'IDR',
   role: 'superadmin',

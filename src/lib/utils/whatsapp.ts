@@ -15,6 +15,10 @@ export function normalizeWaNumber(phone?: string | null): string {
 }
 
 export function getAdminWaNumber(): string {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('admin_wa_number') || sessionStorage.getItem('admin_wa_number');
+    if (stored && stored.trim()) return normalizeWaNumber(stored);
+  }
   const envNumber =
     process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER ||
     process.env.NEXT_PUBLIC_ADMIN_WA ||
@@ -23,6 +27,10 @@ export function getAdminWaNumber(): string {
 }
 
 export function getAdminWaDisplayNumber(): string {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('admin_wa_number') || sessionStorage.getItem('admin_wa_number');
+    if (stored && stored.trim()) return stored.trim();
+  }
   const raw =
     process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER ||
     process.env.NEXT_PUBLIC_ADMIN_WA ||

@@ -110,6 +110,12 @@ export default function SettingsPage() {
         setReminderFrequency(data.user.reminder_frequency || 1);
         setReminderTime1(data.user.reminder_time_1?.slice(0, 5) || '09:00');
         setReminderTime2(data.user.reminder_time_2?.slice(0, 5) || '20:00');
+        if (data.user.role === 'admin' || data.user.role === 'superadmin' || data.user.id === 'usr_admin_999') {
+          if (typeof window !== 'undefined' && data.user.phone_number) {
+            localStorage.setItem('admin_wa_number', data.user.phone_number);
+            sessionStorage.setItem('admin_wa_number', data.user.phone_number);
+          }
+        }
       }
     } catch (e) {
       console.error(e);
@@ -161,6 +167,10 @@ export default function SettingsPage() {
           sessionStorage.setItem('user_email', email);
           sessionStorage.setItem('user_phone', phoneNumber);
           sessionStorage.setItem('user_avatar', avatarUrl);
+          if (user?.role === 'admin' || user?.role === 'superadmin' || user?.id === 'usr_admin_999') {
+            localStorage.setItem('admin_wa_number', phoneNumber);
+            sessionStorage.setItem('admin_wa_number', phoneNumber);
+          }
         }
         setProfileSaved(true);
         setNewPassword('');

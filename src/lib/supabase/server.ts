@@ -1,14 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { 
   UserProfile, Wallet, Category, Budget, Transaction, 
-  AIProvider, AISettings, AILog, PaymentRecord, ExportRecord 
+  AIProvider, AISettings, AILog, PaymentRecord, ExportRecord, UserApproval 
 } from '../types';
 import { 
   INITIAL_USER, INITIAL_ADMIN, INITIAL_WALLETS, INITIAL_CATEGORIES, 
   INITIAL_BUDGETS, INITIAL_TRANSACTIONS, INITIAL_AI_PROVIDERS, 
   INITIAL_AI_SETTINGS, INITIAL_AI_LOGS, INITIAL_PAYMENTS, INITIAL_EXPORTS 
 } from './dev-storage';
-import { loadLocalDatabase, saveLocalDatabase, PersistentDataSnapshot } from '../storage/local-db';
+import { loadLocalDatabase, saveLocalDatabase, PersistentDataSnapshot, setAppSetting } from '../storage/local-db';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock-tatadana.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'mock-service-role';
@@ -38,14 +38,21 @@ class ServerStore {
   aiLogs: AILog[] = [...INITIAL_AI_LOGS];
   payments: PaymentRecord[] = [...INITIAL_PAYMENTS];
   exports: ExportRecord[] = [...INITIAL_EXPORTS];
+  settings: Map<string, string> = new Map();
+  userApprovals: Map<string, UserApproval> = new Map();
   pendingPurchases: Map<
     string,
     { item: string; amount: number; category: string; tatadanaCategoryName: string; type?: 'expense' | 'income'; createdAt: number }
   > = new Map();
 
   constructor() {
+    const defaultAdminWA = process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || process.env.NEXT_PUBLIC_ADMIN_WA || '087730370324';
+    this.settings.set('admin_wa_number', defaultAdminWA);
+    this.settings.set('admin_phone_number', defaultAdminWA);
+    this.settings.set('admin_email', 'ferdiansyahr213@gmail.com');
+
     this.users.set(INITIAL_USER.id, { ...INITIAL_USER });
-    this.users.set(INITIAL_ADMIN.id, { ...INITIAL_ADMIN });
+    this.users.set(INITIAL_ADMIN.id, { ...INITIAL_ADMIN, phone_number: defaultAdminWA });
 
     // Pending demo user for testing approval workflows
     this.users.set('usr_demo_456', {
@@ -103,10 +110,51 @@ class ServerStore {
       if (persisted.aiProviders && persisted.aiProviders.length > 0) this.aiProviders = [...persisted.aiProviders];
       if (persisted.aiSettings) this.aiSettings = { ...persisted.aiSettings };
       if (persisted.exports && persisted.exports.length > 0) this.exports = [...persisted.exports];
+      if (persisted.settings && persisted.settings.length > 0) {
+        for (const [k, v] of persisted.settings) {
+          this.settings.set(k, v);
+        }
+      }
+      if (persisted.userApprovals && persisted.userApprovals.length > 0) {
+        for (const a of persisted.userApprovals) {
+          this.userApprovals.set(a.id, a);
+        }
+      }
 
-      // Ensure admin & initial user exist if somehow omitted
+      // Ensure admin & initial user exist if somehow omitted, but NEVER overwrite existing admin phone/password!
       if (!this.users.has(INITIAL_USER.id)) this.users.set(INITIAL_USER.id, { ...INITIAL_USER });
-      if (!this.users.has(INITIAL_ADMIN.id)) this.users.set(INITIAL_ADMIN.id, { ...INITIAL_ADMIN });
+      if (!this.users.has(INITIAL_ADMIN.id)) {
+        this.users.set(INITIAL_ADMIN.id, {
+          ...INITIAL_ADMIN,
+          phone_number: this.settings.get('admin_wa_number') || defaultAdminWA,
+        });
+      } else {
+        // Sync saved admin_wa_number if admin's phone number was previously default or changed
+        const currentAdmin = this.users.get(INITIAL_ADMIN.id)!;
+        const savedSetting = this.settings.get('admin_wa_number') || this.settings.get('admin_phone_number');
+        if (savedSetting && currentAdmin.phone_number !== savedSetting) {
+          currentAdmin.phone_number = savedSetting;
+        }
+      }
+
+      // Sync user approvals for any pending users in users map
+      for (const u of this.users.values()) {
+        if (u.role !== 'admin' && u.role !== 'superadmin') {
+          const apprId = `appr_${u.id}`;
+          if (!this.userApprovals.has(apprId) && !this.userApprovals.has(u.id)) {
+            this.userApprovals.set(apprId, {
+              id: apprId,
+              full_name: u.full_name,
+              email: u.email || '',
+              phone_number: u.phone_number || '',
+              status: (u.verification_status === 'verified' ? 'approved' : 'pending') as any,
+              created_at: u.created_at,
+              updated_at: u.updated_at,
+            });
+          }
+        }
+      }
+
       if (!this.wallets.has(INITIAL_ADMIN.id)) {
         this.wallets.set(INITIAL_ADMIN.id, [{
           id: 'wal_admin_1',
@@ -123,7 +171,7 @@ class ServerStore {
       }
 
       const totalTx = Array.from(this.transactions.values()).reduce((sum, list) => sum + list.length, 0);
-      console.log(`[ServerStore] 💾 Database lokal aktif! Memuat ${totalTx} transaksi, ${this.users.size} pengguna, dan saldo dompet.`);
+      console.log(`[ServerStore] 💾 Database lokal aktif! Memuat ${totalTx} transaksi, ${this.users.size} pengguna, ${this.userApprovals.size} approval, dan saldo dompet.`);
     } else {
       // First run: persist baseline data so files exist
       this.persist();
@@ -147,11 +195,23 @@ class ServerStore {
         aiProviders: this.aiProviders,
         aiSettings: this.aiSettings,
         exports: this.exports,
+        settings: Array.from(this.settings.entries()),
+        userApprovals: Array.from(this.userApprovals.values()),
       };
       saveLocalDatabase(snapshot);
     } catch (err: any) {
       console.error('[ServerStore] ⚠️ Gagal persist database:', err.message);
     }
+  }
+
+  getSetting(key: string, defaultValue?: string): string {
+    return this.settings.get(key) || defaultValue || '';
+  }
+
+  setSetting(key: string, value: string): void {
+    this.settings.set(key, value);
+    setAppSetting(key, value);
+    this.persist();
   }
 
   setPendingPurchase(
@@ -272,6 +332,18 @@ class ServerStore {
 
     this.users.set(newUserId, newUser);
 
+    // Synchronize to userApprovals
+    const approval: UserApproval = {
+      id: `appr_${newUserId}`,
+      full_name: newUser.full_name,
+      email: newUser.email || '',
+      phone_number: newUser.phone_number || '',
+      status: isSuper ? 'approved' : 'pending',
+      created_at: newUser.created_at,
+      updated_at: newUser.updated_at,
+    };
+    this.userApprovals.set(approval.id, approval);
+
     const defaultWallet: Wallet = {
       id: `wal_${Date.now()}_1`,
       user_id: newUserId,
@@ -291,6 +363,60 @@ class ServerStore {
 
     this.persist();
     return newUser;
+  }
+
+  // Update approval and user status safely
+  updateApprovalStatus(idOrEmailOrUserId: string, status: 'approved' | 'rejected'): { user?: UserProfile; approval?: UserApproval } {
+    let targetUser: UserProfile | undefined;
+    let targetApproval: UserApproval | undefined;
+
+    // Search user by id, appr_id, or email
+    for (const u of this.users.values()) {
+      if (
+        u.id === idOrEmailOrUserId || 
+        `appr_${u.id}` === idOrEmailOrUserId || 
+        (u.email && u.email.toLowerCase() === idOrEmailOrUserId.toLowerCase())
+      ) {
+        targetUser = u;
+        break;
+      }
+    }
+
+    // Search approval by id or email
+    for (const a of this.userApprovals.values()) {
+      if (
+        a.id === idOrEmailOrUserId || 
+        (a.email && a.email.toLowerCase() === idOrEmailOrUserId.toLowerCase()) ||
+        (targetUser && a.id === `appr_${targetUser.id}`)
+      ) {
+        targetApproval = a;
+        break;
+      }
+    }
+
+    if (targetUser) {
+      targetUser.verification_status = status === 'approved' ? 'verified' : 'pending';
+      targetUser.updated_at = new Date().toISOString();
+    }
+
+    if (targetApproval) {
+      targetApproval.status = status;
+      targetApproval.updated_at = new Date().toISOString();
+    } else if (targetUser) {
+      targetApproval = {
+        id: `appr_${targetUser.id}`,
+        full_name: targetUser.full_name,
+        email: targetUser.email || '',
+        phone_number: targetUser.phone_number || '',
+        status,
+        created_at: targetUser.created_at,
+        updated_at: new Date().toISOString(),
+      };
+      this.userApprovals.set(targetApproval.id, targetApproval);
+    }
+
+    this.persist();
+    return { user: targetUser, approval: targetApproval };
   }
 
   // Find user by email

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Smartphone, Mail, Lock, User, UserPlus, AlertCircle, ArrowRight } from 'lucide-react';
 import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -36,54 +36,55 @@ export default function RegisterPage() {
     const cleanPhone = phone.trim();
 
     try {
-      // 1. Simpan nama lengkap, email, dan nomor HP ke tabel user_approvals menggunakan Supabase client
+      // 1. Simpan ke database persisten lokal TataDana (SQLite & ServerStore)
       let approvalId = `appr_${Date.now()}`;
-      try {
-        const { data: insertedApproval, error: supabaseError } = await supabase
-          .from('user_approvals')
-          .insert([
-            {
-              full_name: cleanName,
-              email: cleanEmail,
-              phone_number: cleanPhone,
-              status: 'pending',
-            },
-          ])
-          .select()
-          .maybeSingle();
 
-        if (insertedApproval?.id) {
-          approvalId = insertedApproval.id;
-        }
+      // Mirror ke live Supabase jika credentials aktif
+      if (isLiveSupabaseConfigured()) {
+        try {
+          const { data: insertedApproval } = await supabase
+            .from('user_approvals')
+            .insert([
+              {
+                full_name: cleanName,
+                email: cleanEmail,
+                phone_number: cleanPhone,
+                status: 'pending',
+              },
+            ])
+            .select()
+            .maybeSingle();
 
-        if (supabaseError) {
-          console.warn('Supabase client insert to user_approvals notice:', supabaseError.message);
+          if (insertedApproval?.id) {
+            approvalId = insertedApproval.id;
+          }
+        } catch (sbErr) {
+          console.warn('Supabase direct insert handled:', sbErr);
         }
-      } catch (sbErr) {
-        console.warn('Supabase direct insert handled:', sbErr);
       }
 
-      // 2. Sinkronkan pembuatan akun dengan status pending ke backend
-      try {
-        const res = await fetch('/api/data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'register_user',
-            payload: {
-              fullName: cleanName,
-              phone: cleanPhone,
-              email: cleanEmail,
-              password: password,
-            },
-          }),
-        });
-        const data = await res.json();
-        if (data.ok && data.user?.id) {
-          approvalId = data.user.id;
-        }
-      } catch (syncErr) {
-        console.warn('Backend sync notice:', syncErr);
+      // 2. Daftarkan akun baru secara permanen di backend
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register_user',
+          payload: {
+            fullName: cleanName,
+            phone: cleanPhone,
+            email: cleanEmail,
+            password: password,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Gagal menyimpan pendaftaran.');
+      }
+
+      if (data.user?.id) {
+        approvalId = data.user.id;
       }
 
       setIsLoading(false);

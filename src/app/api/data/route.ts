@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
     aiSettings: serverStore.aiSettings,
     payments: serverStore.payments,
     allUsers: Array.from(serverStore.users.values()),
+    settings: Object.fromEntries(serverStore.settings.entries()),
+    userApprovals: Array.from(serverStore.userApprovals.values()),
   });
 }
 
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Create new user with status 'pending'
+      // Create new user with status 'pending' (or 'verified' if superadmin)
       const newUser = serverStore.registerNewUser({
         fullName,
         phone,
@@ -64,11 +66,30 @@ export async function POST(req: NextRequest) {
         password,
       });
 
+      // If live Supabase is active, mirror to Supabase
+      if (isLiveSupabaseConfigured()) {
+        try {
+          await supabase.from('user_approvals').insert([
+            {
+              full_name: newUser.full_name,
+              email: newUser.email,
+              phone_number: newUser.phone_number,
+              status: newUser.verification_status === 'verified' ? 'approved' : 'pending',
+            },
+          ]);
+        } catch (sbErr) {
+          console.warn('[API Data] Live Supabase mirror notice:', sbErr);
+        }
+      }
+
       return NextResponse.json({
         ok: true,
-        status: 'pending',
-        message: 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.',
+        status: newUser.verification_status,
+        message: newUser.verification_status === 'pending'
+          ? 'Akun Anda sedang menunggu persetujuan admin sebelum dapat digunakan.'
+          : 'Pendaftaran akun berhasil!',
         user: newUser,
+        approvals: Array.from(serverStore.userApprovals.values()),
       });
     }
 
@@ -331,17 +352,79 @@ export async function POST(req: NextRequest) {
     if (action === 'update_profile') {
       Object.assign(user, payload);
       user.updated_at = new Date().toISOString();
+
+      // If user is admin/superadmin, keep system-wide admin contact settings in sync
+      if (user.role === 'admin' || user.role === 'superadmin' || user.id === 'usr_admin_999') {
+        if (payload.phone_number) {
+          serverStore.setSetting('admin_wa_number', payload.phone_number);
+          serverStore.setSetting('admin_phone_number', payload.phone_number);
+        }
+        if (payload.email) {
+          serverStore.setSetting('admin_email', payload.email);
+        }
+      }
+
       serverStore.persist();
-      return NextResponse.json({ ok: true, user });
+      return NextResponse.json({ 
+        ok: true, 
+        user, 
+        settings: Object.fromEntries(serverStore.settings.entries()) 
+      });
+    }
+
+    if (action === 'update_settings') {
+      if (payload && typeof payload === 'object') {
+        for (const [k, v] of Object.entries(payload)) {
+          if (typeof v === 'string') {
+            serverStore.setSetting(k, v);
+          }
+        }
+        if (payload.admin_wa_number || payload.admin_phone_number) {
+          const num = payload.admin_wa_number || payload.admin_phone_number;
+          const admin = serverStore.users.get('usr_admin_999');
+          if (admin) admin.phone_number = num;
+        }
+      }
+      serverStore.persist();
+      return NextResponse.json({ 
+        ok: true, 
+        settings: Object.fromEntries(serverStore.settings.entries()) 
+      });
+    }
+
+    if (action === 'get_user_approvals') {
+      return NextResponse.json({
+        ok: true,
+        approvals: Array.from(serverStore.userApprovals.values()),
+      });
     }
 
     if (action === 'approve_user') {
-      const targetUser = serverStore.users.get(payload.targetUserId);
-      if (targetUser) {
-        targetUser.verification_status = 'verified';
-        targetUser.updated_at = new Date().toISOString();
-        serverStore.persist();
-        return NextResponse.json({ ok: true, user: targetUser });
+      const targetId = payload.targetUserId || payload.id || payload.email;
+      const res = serverStore.updateApprovalStatus(targetId, 'approved');
+      if (res.user || res.approval) {
+        return NextResponse.json({ 
+          ok: true, 
+          user: res.user, 
+          approval: res.approval,
+          approvals: Array.from(serverStore.userApprovals.values()),
+          allUsers: Array.from(serverStore.users.values())
+        });
+      }
+      return NextResponse.json({ ok: false, error: 'User tidak ditemukan' }, { status: 404 });
+    }
+
+    if (action === 'reject_user') {
+      const targetId = payload.targetUserId || payload.id || payload.email;
+      const res = serverStore.updateApprovalStatus(targetId, 'rejected');
+      if (res.user || res.approval) {
+        return NextResponse.json({ 
+          ok: true, 
+          user: res.user, 
+          approval: res.approval,
+          approvals: Array.from(serverStore.userApprovals.values()),
+          allUsers: Array.from(serverStore.users.values())
+        });
       }
       return NextResponse.json({ ok: false, error: 'User tidak ditemukan' }, { status: 404 });
     }
@@ -380,11 +463,14 @@ export async function POST(req: NextRequest) {
         const isPasswordMatch = validAdminPasswords.includes(inputPassword);
 
         if (isPasswordMatch) {
-          const adminUser: any = serverStore.users.get('usr_admin_999') || {
+          const existingAdmin = serverStore.users.get('usr_admin_999');
+          const adminSavedPhone = existingAdmin?.phone_number || serverStore.getSetting('admin_wa_number') || process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || process.env.NEXT_PUBLIC_ADMIN_WA || '087730370324';
+
+          const adminUser: any = existingAdmin || {
             id: 'usr_admin_999',
             full_name: 'Administrator TataDana',
             email: adminEmail,
-            phone_number: process.env.NEXT_PUBLIC_ADMIN_WA || '081234567890',
+            phone_number: adminSavedPhone,
             role: 'superadmin',
             verification_status: 'verified',
             plan: 'pro',
@@ -402,6 +488,9 @@ export async function POST(req: NextRequest) {
           adminUser.role = 'superadmin';
           adminUser.verification_status = 'verified';
           adminUser.password = inputPassword;
+          if (!adminUser.phone_number || adminUser.phone_number === '081234567890') {
+            adminUser.phone_number = adminSavedPhone;
+          }
           serverStore.users.set('usr_admin_999', adminUser);
           serverStore.persist();
 

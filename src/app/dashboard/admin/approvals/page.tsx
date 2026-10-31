@@ -20,7 +20,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { UserApproval } from '@/lib/types';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase/client';
 import { fetchUserApprovals } from '@/lib/supabase/data-service';
 import { formatWIBDateTime } from '@/lib/utils/date-wib';
 import { normalizeWaNumber } from '@/lib/utils/whatsapp';
@@ -36,7 +36,7 @@ export default function AdminApprovalsPage() {
   const loadApprovals = async () => {
     setLoading(true);
     try {
-      if (supabase) {
+      if (isLiveSupabaseConfigured()) {
         const { data, error } = await supabase
           .from('user_approvals')
           .select('*')
@@ -66,26 +66,24 @@ export default function AdminApprovalsPage() {
   const handleUpdateStatus = async (item: UserApproval, newStatus: 'approved' | 'rejected') => {
     setIsUpdating(item.id);
     try {
-      // 1. Direct update to Supabase
-      if (supabase) {
+      // 1. Direct update to Supabase if live
+      if (isLiveSupabaseConfigured()) {
         await supabase
           .from('user_approvals')
           .update({ status: newStatus })
           .eq('id', item.id);
       }
 
-      // 2. Synchronize to backend users system if approved
-      if (newStatus === 'approved') {
-        await fetch('/api/data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'approve_user',
-            payload: { targetUserId: item.id, email: item.email },
-            userId: 'usr_admin_999',
-          }),
-        });
-      }
+      // 2. Synchronize to backend users system (SQLite & JSON)
+      await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: newStatus === 'approved' ? 'approve_user' : 'reject_user',
+          payload: { targetUserId: item.id, email: item.email },
+          userId: 'usr_admin_999',
+        }),
+      });
 
       // Optimistic state update
       setApprovals((prev) =>

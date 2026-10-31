@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-10-30T12:14:18.092Z",
+  "last_updated": "2026-10-31T01:37:32.313Z",
   "users": [
     [
       "usr_demo_123",
@@ -9,10 +9,11 @@
         "email": "budi.santoso@tatadana.id",
         "full_name": "Budi Santoso",
         "phone_number": "081234567890",
-        "avatar_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-        "currency": "IDR",
         "role": "user",
         "plan": "pro",
+        "verification_status": "verified",
+        "avatar_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        "currency": "IDR",
         "telegram_chat_id": 123999444,
         "telegram_username": "test_user",
         "telegram_bot_token": "8795289115:AAGPjN73UpjnmbCS5TR6z2PCLlaIQZKB3dY",
@@ -23,7 +24,6 @@
         "reminder_time_1": "09:00:00",
         "reminder_time_2": "20:00:00",
         "onboarding_completed": true,
-        "verification_status": "verified",
         "created_at": "2026-09-27T03:18:37.568Z",
         "updated_at": "2026-10-28T17:18:28.302Z"
       }
@@ -34,25 +34,25 @@
         "id": "usr_admin_999",
         "email": "ferdiansyahr213@gmail.com",
         "full_name": "Administrator TataDana",
-        "phone_number": "081234567890",
-        "avatar_url": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-        "currency": "IDR",
+        "phone_number": "087730370324",
         "role": "superadmin",
         "plan": "pro",
+        "verification_status": "verified",
         "password": "Vina2007",
+        "avatar_url": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+        "currency": "IDR",
+        "telegram_chat_id": 8807546522,
         "telegram_username": "revi",
         "telegram_bot_token": "8909813540:AAFdPSHsxhwJsOjxsl5oyxTaF5POy3jRLOI",
         "telegram_connected": true,
         "telegram_connected_at": "2026-10-27T03:18:37.568Z",
-        "reminder_enabled": false,
+        "reminder_enabled": true,
         "reminder_frequency": 1,
         "reminder_time_1": "09:00:00",
         "reminder_time_2": "20:00:00",
         "onboarding_completed": true,
-        "verification_status": "verified",
         "created_at": "2026-08-28T03:18:37.568Z",
-        "updated_at": "2026-10-27T03:18:37.568Z",
-        "telegram_chat_id": 8807546522
+        "updated_at": "2026-10-31T01:33:04.836Z"
       }
     ],
     [
@@ -62,11 +62,11 @@
         "email": "siti.rahma@tatadana.id",
         "full_name": "Siti Rahma",
         "phone_number": "081987654321",
-        "avatar_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-        "currency": "IDR",
         "role": "user",
         "plan": "starter",
         "verification_status": "pending",
+        "avatar_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+        "currency": "IDR",
         "telegram_connected": false,
         "reminder_enabled": true,
         "reminder_frequency": 1,
@@ -81,20 +81,20 @@
       "usr_1793071125507",
       {
         "id": "usr_1793071125507",
+        "email": "test.pending@example.com",
         "full_name": "Test Pending User",
         "phone_number": "089912345678",
-        "email": "test.pending@example.com",
+        "role": "user",
+        "plan": "starter",
+        "verification_status": "pending",
         "password": "Password123!",
         "currency": "IDR",
-        "role": "user",
-        "verification_status": "pending",
-        "plan": "starter",
         "telegram_connected": false,
         "reminder_enabled": true,
         "reminder_frequency": 1,
         "reminder_time_1": "09:00:00",
         "reminder_time_2": "20:00:00",
-        "onboarding_completed": false,
+        "onboarding_completed": true,
         "created_at": "2026-10-27T03:18:45.507Z",
         "updated_at": "2026-10-28T17:18:28.641Z"
       }
@@ -103,10 +103,74 @@
       "usr_1793200176636",
       {
         "id": "usr_1793200176636",
+        "email": "revikerudung99@gmail.com",
         "full_name": "Revi",
         "phone_number": "087857524532",
-        "email": "revikerudung99@gmail.com",
+        "role": "user",
+        "plan": "starter",
+        "verification_status": "verified",
         "password": "Revi1234",
+        "currency": "IDR",
+        "telegram_connected": false,
+        "reminder_enabled": true,
+        "reminder_frequency": 1,
+        "reminder_time_1": "09:00:00",
+        "reminder_time_2": "20:00:00",
+        "onboarding_completed": true,
+        "created_at": "2026-10-28T15:09:36.636Z",
+        "updated_at": "2026-10-28T15:29:04.383Z"
+      }
+    ],
+    [
+      "usr_1793410372283",
+      {
+        "id": "usr_1793410372283",
+        "email": "pengguna.baru.1793410372283@tatadana.id",
+        "full_name": "Pengguna Baru Persisten",
+        "phone_number": "081233445566",
+        "role": "user",
+        "plan": "starter",
+        "verification_status": "pending",
+        "currency": "IDR",
+        "telegram_connected": false,
+        "reminder_enabled": true,
+        "reminder_frequency": 1,
+        "reminder_time_1": "09:00:00",
+        "reminder_time_2": "20:00:00",
+        "onboarding_completed": false,
+        "created_at": "2026-10-31T01:32:52.288Z",
+        "updated_at": "2026-10-31T01:32:52.297Z"
+      }
+    ],
+    [
+      "usr_1793410384809",
+      {
+        "id": "usr_1793410384809",
+        "email": "pengguna.baru.1793410384809@tatadana.id",
+        "full_name": "Pengguna Baru Persisten",
+        "phone_number": "081233445566",
+        "role": "user",
+        "plan": "starter",
+        "verification_status": "verified",
+        "currency": "IDR",
+        "telegram_connected": false,
+        "reminder_enabled": true,
+        "reminder_frequency": 1,
+        "reminder_time_1": "09:00:00",
+        "reminder_time_2": "20:00:00",
+        "onboarding_completed": false,
+        "created_at": "2026-10-31T01:33:04.809Z",
+        "updated_at": "2026-10-31T01:33:04.814Z"
+      }
+    ],
+    [
+      "usr_1793410651982",
+      {
+        "id": "usr_1793410651982",
+        "full_name": "Rina Test Admin",
+        "phone_number": "081299998888",
+        "email": "rina.test@tatadana.id",
+        "password": "RinaPassword123!",
         "currency": "IDR",
         "role": "user",
         "verification_status": "verified",
@@ -117,8 +181,8 @@
         "reminder_time_1": "09:00:00",
         "reminder_time_2": "20:00:00",
         "onboarding_completed": false,
-        "created_at": "2026-10-28T15:09:36.636Z",
-        "updated_at": "2026-10-28T15:29:04.383Z"
+        "created_at": "2026-10-31T01:37:31.982Z",
+        "updated_at": "2026-10-31T01:37:32.313Z"
       }
     ]
   ],
@@ -212,6 +276,23 @@
           "icon": "landmark",
           "created_at": "2026-10-28T15:09:36.637Z",
           "updated_at": "2026-10-28T15:09:36.637Z"
+        }
+      ]
+    ],
+    [
+      "usr_1793410651982",
+      [
+        {
+          "id": "wal_1793410651982_1",
+          "user_id": "usr_1793410651982",
+          "name": "Dompet Utama (BCA)",
+          "type": "bank",
+          "balance": 1000000,
+          "is_default": true,
+          "color": "#0284c7",
+          "icon": "landmark",
+          "created_at": "2026-10-31T01:37:31.982Z",
+          "updated_at": "2026-10-31T01:37:31.982Z"
         }
       ]
     ]
@@ -556,6 +637,91 @@
           "is_custom": false
         }
       ]
+    ],
+    [
+      "usr_1793410651982",
+      [
+        {
+          "id": "cat_1",
+          "name": "Makanan & Minuman",
+          "type": "expense",
+          "emoji": "🍜",
+          "color": "#f97316",
+          "is_custom": false
+        },
+        {
+          "id": "cat_2",
+          "name": "Transportasi",
+          "type": "expense",
+          "emoji": "🚗",
+          "color": "#0284c7",
+          "is_custom": false
+        },
+        {
+          "id": "cat_3",
+          "name": "Hiburan",
+          "type": "expense",
+          "emoji": "🎮",
+          "color": "#8b5cf6",
+          "is_custom": false
+        },
+        {
+          "id": "cat_4",
+          "name": "Tagihan & Utilitas",
+          "type": "expense",
+          "emoji": "🏠",
+          "color": "#ef4444",
+          "is_custom": false
+        },
+        {
+          "id": "cat_5",
+          "name": "Kesehatan",
+          "type": "expense",
+          "emoji": "💊",
+          "color": "#10b981",
+          "is_custom": false
+        },
+        {
+          "id": "cat_6",
+          "name": "Belanja",
+          "type": "expense",
+          "emoji": "👕",
+          "color": "#ec4899",
+          "is_custom": false
+        },
+        {
+          "id": "cat_7",
+          "name": "Pendidikan",
+          "type": "expense",
+          "emoji": "📚",
+          "color": "#f59e0b",
+          "is_custom": false
+        },
+        {
+          "id": "cat_8",
+          "name": "Gaji",
+          "type": "income",
+          "emoji": "💼",
+          "color": "#10b981",
+          "is_custom": false
+        },
+        {
+          "id": "cat_9",
+          "name": "Bonus & Freelance",
+          "type": "income",
+          "emoji": "💰",
+          "color": "#f97316",
+          "is_custom": false
+        },
+        {
+          "id": "cat_10",
+          "name": "Investasi & Dividen",
+          "type": "income",
+          "emoji": "📈",
+          "color": "#6366f1",
+          "is_custom": false
+        }
+      ]
     ]
   ],
   "budgets": [
@@ -626,6 +792,10 @@
     ],
     [
       "usr_1793200176636",
+      []
+    ],
+    [
+      "usr_1793410651982",
       []
     ]
   ],
@@ -1019,6 +1189,10 @@
     [
       "usr_1793200176636",
       []
+    ],
+    [
+      "usr_1793410651982",
+      []
     ]
   ],
   "payments": [
@@ -1153,6 +1327,85 @@
       "signed_url": "/api/reports/download?id=exp_2",
       "expires_at": "2026-11-03T03:18:37.623Z",
       "created_at": "2026-10-12T03:18:37.623Z"
+    }
+  ],
+  "settings": [
+    [
+      "admin_wa_number",
+      "087730370324"
+    ],
+    [
+      "admin_phone_number",
+      "087730370324"
+    ],
+    [
+      "admin_email",
+      "ferdiansyahr213@gmail.com"
+    ]
+  ],
+  "userApprovals": [
+    {
+      "id": "appr_usr_1793410384809",
+      "full_name": "Pengguna Baru Persisten",
+      "email": "pengguna.baru.1793410384809@tatadana.id",
+      "phone_number": "081233445566",
+      "status": "approved",
+      "created_at": "2026-10-31T01:33:04.825Z",
+      "updated_at": "2026-10-31T01:33:04.825Z"
+    },
+    {
+      "id": "appr_usr_1793410372283",
+      "full_name": "Pengguna Baru Persisten",
+      "email": "pengguna.baru.1793410372283@tatadana.id",
+      "phone_number": "081233445566",
+      "status": "pending",
+      "created_at": "2026-10-31T01:32:52.309Z",
+      "updated_at": "2026-10-31T01:32:52.309Z"
+    },
+    {
+      "id": "appr_usr_demo_123",
+      "full_name": "Budi Santoso",
+      "email": "budi.santoso@tatadana.id",
+      "phone_number": "081234567890",
+      "status": "approved",
+      "created_at": "2026-09-27T03:18:37.568Z",
+      "updated_at": "2026-10-28T17:18:28.302Z"
+    },
+    {
+      "id": "appr_usr_demo_456",
+      "full_name": "Siti Rahma",
+      "email": "siti.rahma@tatadana.id",
+      "phone_number": "081987654321",
+      "status": "pending",
+      "created_at": "2026-10-25T03:18:37.637Z",
+      "updated_at": "2026-10-27T03:18:37.637Z"
+    },
+    {
+      "id": "appr_usr_1793071125507",
+      "full_name": "Test Pending User",
+      "email": "test.pending@example.com",
+      "phone_number": "089912345678",
+      "status": "pending",
+      "created_at": "2026-10-27T03:18:45.507Z",
+      "updated_at": "2026-10-28T17:18:28.641Z"
+    },
+    {
+      "id": "appr_usr_1793200176636",
+      "full_name": "Revi",
+      "email": "revikerudung99@gmail.com",
+      "phone_number": "087857524532",
+      "status": "approved",
+      "created_at": "2026-10-28T15:09:36.636Z",
+      "updated_at": "2026-10-28T15:29:04.383Z"
+    },
+    {
+      "id": "appr_usr_1793410651982",
+      "full_name": "Rina Test Admin",
+      "email": "rina.test@tatadana.id",
+      "phone_number": "081299998888",
+      "status": "approved",
+      "created_at": "2026-10-31T01:37:31.982Z",
+      "updated_at": "2026-10-31T01:37:32.313Z"
     }
   ]
 }

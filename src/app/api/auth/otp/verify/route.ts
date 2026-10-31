@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
     if (user) {
       user.verification_status = isSuperadmin ? 'verified' : (user.verification_status || 'pending');
       user.role = isSuperadmin ? 'superadmin' : (user.role || 'user');
+      serverStore.persist();
     }
 
     return NextResponse.json({

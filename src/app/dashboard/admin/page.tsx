@@ -25,7 +25,7 @@ import {
   Crown
 } from 'lucide-react';
 import { UserProfile, UserApproval, PaymentRecord } from '@/lib/types';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase/client';
 import { fetchUserApprovals } from '@/lib/supabase/data-service';
 import { formatRupiah } from '@/lib/utils/currency';
 import { formatWIBDateTime, formatShortWIB } from '@/lib/utils/date-wib';
@@ -40,8 +40,8 @@ export default function AdminOverviewPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch approvals directly from Supabase
-      if (supabase) {
+      // 1. Fetch approvals
+      if (isLiveSupabaseConfigured()) {
         const { data, error } = await supabase
           .from('user_approvals')
           .select('*')
@@ -83,7 +83,7 @@ export default function AdminOverviewPage() {
 
   const handleApproveRegistration = async (item: UserApproval) => {
     try {
-      if (supabase) {
+      if (isLiveSupabaseConfigured()) {
         await supabase
           .from('user_approvals')
           .update({ status: 'approved' })
