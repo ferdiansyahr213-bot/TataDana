@@ -369,18 +369,6 @@ export const INITIAL_PAYMENTS: PaymentRecord[] = [
     created_at: new Date(Date.now() - 86400000 * 25).toISOString(),
     updated_at: new Date(Date.now() - 86400000 * 25).toISOString(),
   },
-  {
-    id: 'pay_2',
-    user_id: 'usr_demo_456',
-    user_name: 'Siti Rahma',
-    plan: 'pro',
-    amount: 99000,
-    payment_method: 'manual_transfer',
-    status: 'pending',
-    manual_receipt_url: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=300',
-    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
 ];
 
 export const INITIAL_EXPORTS: ExportRecord[] = [
