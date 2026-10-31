@@ -47,27 +47,16 @@ export function getAdminRegisterWaUrl(params?: {
   email?: string;
   phone?: string;
 }): string {
-  const adminNumber = getAdminWaNumber();
-
-  const name = params?.fullName?.trim() || '[Tulis nama Anda]';
-  const email = params?.email?.trim() || '[Tulis email Anda]';
-  const phone = params?.phone?.trim() || '[Tulis no. WhatsApp / HP Anda]';
-
-  const message = `Halo Admin TataDana, saya tertarik untuk menggunakan aplikasi TataDana untuk pencatatan keuangan pribadi/bisnis saya.
-
-Data Calon Pengguna:
-- Nama: ${name}
-- Email: ${email}
-- No. WhatsApp / HP: ${phone}
-
-Mohon informasi langkah pendaftaran dan cara aktivasi akun pertama saya. Terima kasih!`;
-
-  return `https://wa.me/${adminNumber}?text=${encodeURIComponent(message)}`;
+  return getAdminApprovalWaUrl({
+    fullName: params?.fullName,
+    email: params?.email,
+    phone: params?.phone,
+  });
 }
 
 /**
- * Creates WhatsApp approval URL matching the required pattern:
- * https://wa.me/<NOMOR_ADMIN>?text=Halo%20Admin%20TataDana,%20saya%20ingin%20mengajukan%20persetujuan%20akun%20atas%20nama%20[Nama]%20-%20[Email]
+ * Creates WhatsApp approval URL for newly registered users requesting activation:
+ * https://wa.me/<NOMOR_ADMIN>?text=...
  */
 export function getAdminApprovalWaUrl(params: {
   fullName?: string;
@@ -75,9 +64,22 @@ export function getAdminApprovalWaUrl(params: {
   phone?: string;
 }): string {
   const adminNumber = getAdminWaNumber();
-  const name = params.fullName?.trim() || 'Pengguna';
-  const identity = params.email?.trim() || params.phone?.trim() || 'Akun Baru';
-  const message = `Halo Admin TataDana, saya ingin mengajukan persetujuan akun atas nama ${name} - ${identity}`;
+  const name = params.fullName?.trim() || '-';
+  const email = params.email?.trim() || '-';
+  const phone = params.phone?.trim() || '-';
+
+  const message = `Halo Admin *TataDana*,
+
+Saya telah melakukan pendaftaran akun dan mohon bantuan untuk persetujuan (aktivasi) akun saya.
+
+*Detail Akun Pengguna:*
+• Nama: ${name}
+• Email: ${email}
+• No. HP: ${phone}
+• Keperluan: Persetujuan & Aktivasi Akun
+
+Mohon konfirmasinya apabila akun saya sudah disetujui. Terima kasih!`;
+
   return `https://wa.me/${adminNumber}?text=${encodeURIComponent(message)}`;
 }
 

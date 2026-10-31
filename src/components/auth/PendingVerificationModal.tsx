@@ -25,7 +25,7 @@ export const PendingVerificationModal: React.FC<PendingVerificationModalProps> =
   const [isChecking, setIsChecking] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'info' | 'warning' } | null>(null);
 
-  // Generates link: https://wa.me/<NOMOR_ADMIN>?text=Halo%20Admin%20TataDana,%20saya%20ingin%20mengajukan%20persetujuan%20akun%20atas%20nama%20[Nama]%20-%20[Email]
+  // Generates link WhatsApp persetujuan akun ke Admin TataDana
   const waUrl = getAdminApprovalWaUrl({
     fullName,
     email,
