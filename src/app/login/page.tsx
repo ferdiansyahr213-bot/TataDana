@@ -5,9 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Mail, Lock, LogIn, AlertCircle, MessageCircle } from 'lucide-react';
+import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
-import { getAdminRegisterWaUrl } from '@/lib/utils/whatsapp';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,11 +22,6 @@ export default function LoginPage() {
     email: string;
     phone?: string;
   } | null>(null);
-
-  // Dynamic WhatsApp registration URL populated with email if entered
-  const waRegisterUrl = getAdminRegisterWaUrl({
-    email: email.trim() || undefined,
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,25 +219,12 @@ export default function LoginPage() {
             <span>Masuk dengan Google (Akun Demo)</span>
           </button>
 
-          <p className="text-center text-xs text-slate-500">
+          <p className="text-center text-xs text-slate-500 pt-1">
             Belum punya akun TataDana?{' '}
             <Link href="/register" className="font-bold text-brand-600 hover:underline">
               Daftar sekarang gratis
             </Link>
           </p>
-
-          <div className="pt-1">
-            <a
-              href={waRegisterUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-2.5 px-4 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs"
-              title="Hubungi Admin untuk pendaftaran & aktivasi akun TataDana"
-            >
-              <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600" />
-              <span>Daftar / Bantuan via WhatsApp Admin</span>
-            </a>
-          </div>
         </div>
       </div>
 

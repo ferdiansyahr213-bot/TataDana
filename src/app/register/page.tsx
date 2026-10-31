@@ -5,10 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Smartphone, Mail, Lock, User, UserPlus, AlertCircle, ArrowRight, MessageCircle } from 'lucide-react';
+import { Smartphone, Mail, Lock, User, UserPlus, AlertCircle, ArrowRight } from 'lucide-react';
 import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
 import { supabase } from '@/lib/supabase/client';
-import { getAdminRegisterWaUrl, getAdminWaDisplayNumber } from '@/lib/utils/whatsapp';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -26,13 +25,6 @@ export default function RegisterPage() {
     email: string;
     phone: string;
   } | null>(null);
-
-  // Dynamic WhatsApp registration link reflecting current form inputs
-  const waRegisterUrl = getAdminRegisterWaUrl({
-    fullName: fullName.trim() || undefined,
-    email: email.trim() || undefined,
-    phone: phone.trim() || undefined,
-  });
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,30 +200,7 @@ export default function RegisterPage() {
             </Button>
           </form>
 
-          {/* Opsi Pendaftaran / Kontak Langsung via WhatsApp Admin */}
-          <div className="space-y-3 pt-1">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200" />
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
-                <span className="bg-white px-3 text-slate-400 font-bold">Atau Registrasi Langsung</span>
-              </div>
-            </div>
-
-            <a
-              href={waRegisterUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all transform hover:-translate-y-0.5"
-              title="Hubungi Admin untuk pendaftaran & aktivasi instan akun TataDana"
-            >
-              <MessageCircle className="w-4 h-4 fill-current" />
-              <span>Daftar Manual via WhatsApp Admin</span>
-            </a>
-          </div>
-
-          <p className="text-center text-xs text-slate-500">
+          <p className="text-center text-xs text-slate-500 pt-2">
             Sudah memiliki akun?{' '}
             <Link href="/login" className="font-bold text-brand-600 hover:underline">
               Masuk di sini
