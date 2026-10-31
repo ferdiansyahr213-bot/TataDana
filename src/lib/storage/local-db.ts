@@ -24,6 +24,9 @@ export interface PersistentDataSnapshot {
 }
 
 function getDataDirectory(): string {
+  if (typeof window !== 'undefined' || typeof process === 'undefined' || !process.cwd) {
+    return '';
+  }
   const dir = path.join(process.cwd(), 'data');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -32,16 +35,21 @@ function getDataDirectory(): string {
 }
 
 function getJsonFilePath(): string {
-  return path.join(getDataDirectory(), 'tatadana-local-db.json');
+  const dir = getDataDirectory();
+  if (!dir) return '';
+  return path.join(dir, 'tatadana-local-db.json');
 }
 
 function getSqliteFilePath(): string {
-  return path.join(getDataDirectory(), 'tatadana.db');
+  const dir = getDataDirectory();
+  if (!dir) return '';
+  return path.join(dir, 'tatadana.db');
 }
 
 // Helper to safely obtain node:sqlite DatabaseSync without triggering webpack static bundling errors
 let cachedSqliteDb: any = null;
 export function getSqliteDb(): any {
+  if (typeof window !== 'undefined') return null;
   if (cachedSqliteDb) return cachedSqliteDb;
   try {
     const req = typeof module !== 'undefined' && module.require ? module.require.bind(module) : eval('require');
@@ -352,8 +360,10 @@ export function saveUserApprovalToDb(approval: UserApproval): void {
  * Returns null if no previous persistent storage file exists.
  */
 export function loadLocalDatabase(): PersistentDataSnapshot | null {
+  if (typeof window !== 'undefined') return null;
   let parsed: PersistentDataSnapshot | null = null;
   const jsonPath = getJsonFilePath();
+  if (!jsonPath) return null;
 
   try {
     if (fs.existsSync(jsonPath)) {
@@ -469,9 +479,12 @@ export function loadLocalDatabase(): PersistentDataSnapshot | null {
  * Save complete persistent data atomically to disk (JSON snapshot and SQLite tables).
  */
 export function saveLocalDatabase(snapshot: PersistentDataSnapshot): void {
+  if (typeof window !== 'undefined') return;
   try {
     const dir = getDataDirectory();
+    if (!dir) return;
     const jsonPath = getJsonFilePath();
+    if (!jsonPath) return;
     const tempPath = path.join(dir, 'tatadana-local-db.json.tmp');
 
     // 1. Atomic write to JSON

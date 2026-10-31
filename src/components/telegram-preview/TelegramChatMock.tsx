@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Send, Bot, User, Image as ImageIcon, Mic, Sparkles } from 'lucide-react';
-import { formatExpenseReply, formatIncomeReply, formatSaldoReply, formatBudgetListReply, formatHelpReply } from '@/lib/telegram/formatter';
-import { heuristicParseIndonesian } from '@/lib/ai/provider-manager';
+import { Send, Image as ImageIcon } from 'lucide-react';
+import { heuristicParseIndonesian } from '@/lib/ai/heuristic';
 
 interface ChatMessage {
   id: string;

@@ -7,25 +7,18 @@ import {
   ArrowRight, 
   Play, 
   CheckCircle2, 
-  HelpCircle, 
   ChevronDown, 
   ChevronUp, 
   Bot, 
-  Camera, 
-  BarChart3, 
-  ShieldCheck, 
   FileSpreadsheet, 
   FileText, 
-  Zap, 
   Check 
 } from 'lucide-react';
 import { TelegramChatMock } from '@/components/telegram-preview/TelegramChatMock';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 
 export default function LandingPage() {
-  const [pricingCycle, setPricingCycle] = useState<'monthly' | 'lifetime'>('lifetime');
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(null);
 
   const toggleFaq = (idx: number) => {

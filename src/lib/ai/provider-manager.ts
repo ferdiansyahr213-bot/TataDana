@@ -10,6 +10,9 @@ import {
 } from '../types';
 import { parseIndonesianCurrency } from '../utils/currency';
 import { serverStore } from '../supabase/server';
+import { heuristicParseIndonesian, getDynamicPaymentOptions } from './heuristic';
+
+export { heuristicParseIndonesian, getDynamicPaymentOptions };
 
 interface AIExecutionOptions {
   userId?: string;
@@ -19,11 +22,8 @@ interface AIExecutionOptions {
   audioBase64?: string;
 }
 
-/**
- * Intelligent Indonesian Text Parsing Fallback
- * Used when external AI API keys are not supplied or as instant local pre-parser
- */
-export function heuristicParseIndonesian(text: string, userWallets?: Wallet[]): ParsedTransactionResult | null {
+// heuristicParseIndonesian and getDynamicPaymentOptions are imported and re-exported from ./heuristic
+function _legacyHeuristicParse(text: string, userWallets?: Wallet[]): ParsedTransactionResult | null {
   const clean = text.trim();
   const lower = clean.toLowerCase();
 
@@ -190,7 +190,7 @@ export interface PurchaseIntentResult {
  * Mendapatkan daftar opsi pembayaran dinamis berdasarkan dompet riil pengguna.
  * Menghilangkan opsi hardcoded seperti 'TATADANA_WALLET' atau 'QRIS' yang tidak dimiliki user.
  */
-export function getDynamicPaymentOptions(wallets?: Wallet[]): string[] {
+function _legacyGetDynamicPaymentOptions(wallets?: Wallet[]): string[] {
   if (!wallets || wallets.length === 0) {
     return ['Dompet Utama', 'Tunai / Catat Manual'];
   }
