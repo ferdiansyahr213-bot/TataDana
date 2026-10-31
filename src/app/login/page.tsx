@@ -5,13 +5,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
+import { Mail, Smartphone, Lock, LogIn, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { PendingVerificationModal } from '@/components/auth/PendingVerificationModal';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -29,40 +32,66 @@ export default function LoginPage() {
     setErrorMessage(null);
     setPendingApprovalUser(null);
 
+    const activeIdentifier = loginMethod === 'email' ? email.trim() : phone.trim();
+
+    if (!activeIdentifier) {
+      setIsLoading(false);
+      setErrorMessage(
+        loginMethod === 'email'
+          ? 'Silakan masukkan alamat email Anda.'
+          : 'Silakan masukkan nomor handphone Anda.'
+      );
+      return;
+    }
+
     try {
-      const res = await fetch('/api/data', {
+      // 1. Verifikasi dan otentikasi login melalui endpoint /api/auth/login
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'check_or_login_user',
-          payload: { email: email.trim(), password },
+          identifier: activeIdentifier,
+          email: loginMethod === 'email' ? activeIdentifier : undefined,
+          phone: loginMethod === 'phone' ? activeIdentifier : undefined,
+          loginType: loginMethod,
+          password,
         }),
       });
 
       const data = await res.json();
 
       // Check if user is pending admin approval
-      if (data.status === 'pending' || (data.user && data.user.verification_status === 'pending' && data.user.role !== 'admin' && data.user.role !== 'superadmin')) {
+      if (
+        data.status === 'pending' ||
+        (data.user &&
+          data.user.verification_status === 'pending' &&
+          data.user.role !== 'admin' &&
+          data.user.role !== 'superadmin')
+      ) {
         setIsLoading(false);
         setPendingApprovalUser({
           id: data.user?.id || '',
           fullName: data.user?.full_name,
-          email: data.user?.email || email,
-          phone: data.user?.phone_number,
+          email: data.user?.email || (activeIdentifier.includes('@') ? activeIdentifier : ''),
+          phone: data.user?.phone_number || (!activeIdentifier.includes('@') ? activeIdentifier : ''),
         });
         return;
       }
 
       if (!data.ok) {
         setIsLoading(false);
-        setErrorMessage(data.error || 'Email atau kata sandi salah');
+        setErrorMessage(data.error || 'Email / Nomor Handphone atau kata sandi salah');
         return;
       }
 
       const user = data.user;
 
       // Double-check verification status before storing session or redirecting
-      if (user.verification_status === 'pending' && user.role !== 'admin' && user.role !== 'superadmin') {
+      if (
+        user.verification_status === 'pending' &&
+        user.role !== 'admin' &&
+        user.role !== 'superadmin'
+      ) {
         setIsLoading(false);
         setPendingApprovalUser({
           id: user.id,
@@ -76,11 +105,14 @@ export default function LoginPage() {
       // Login berhasil untuk akun terverifikasi / admin
       sessionStorage.setItem('current_user_id', user.id);
       sessionStorage.setItem('user_role', user.role || 'user');
-      sessionStorage.setItem('user_email', user.email);
+      sessionStorage.setItem('user_email', user.email || '');
       sessionStorage.setItem('user_name', user.full_name || 'Pengguna TataDana');
       sessionStorage.setItem('user_phone', user.phone_number || '');
       sessionStorage.setItem('user_verification_status', user.verification_status || 'verified');
       if (user.avatar_url) sessionStorage.setItem('user_avatar', user.avatar_url);
+
+      localStorage.setItem('current_user_id', user.id);
+      localStorage.setItem('user_email', user.email || '');
 
       setIsLoading(false);
       if (user.role === 'superadmin' || user.role === 'admin') {
@@ -130,13 +162,13 @@ export default function LoginPage() {
 
       {/* Kanan (60%): Form Login (Full Screen on Mobile) */}
       <div className="w-full lg:w-3/5 flex items-center justify-center p-6 sm:p-12 lg:p-20">
-        <div className="w-full max-w-md space-y-8">
+        <div className="w-full max-w-md space-y-7">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               Selamat Datang Kembali
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Masuk dengan akun terverifikasi untuk mengakses dashboard keuangan
+              Pilih metode masuk untuk mengakses dashboard akun Anda
             </p>
           </div>
 
@@ -148,30 +180,93 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Form Login Murni Email & Password */}
+          {/* Opsi Tab Pilihan Metode Login */}
+          <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMethod('email');
+                setErrorMessage(null);
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all duration-200 ${
+                loginMethod === 'email'
+                  ? 'bg-white text-brand-600 shadow-sm border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Masuk dengan Email</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMethod('phone');
+                setErrorMessage(null);
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all duration-200 ${
+                loginMethod === 'phone'
+                  ? 'bg-white text-brand-600 shadow-sm border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Masuk dengan No. HP</span>
+            </button>
+          </div>
+
+          {/* Form Login Dinamis Berdasarkan Tab */}
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-            <Input
-              label="Alamat Email"
-              type="email"
-              placeholder="nama@email.com"
-              leftIcon={<Mail className="w-4 h-4" />}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              label="Kata Sandi"
-              type="password"
-              placeholder="••••••••"
-              leftIcon={<Lock className="w-4 h-4" />}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            {loginMethod === 'email' ? (
+              <Input
+                label="Alamat Email"
+                type="text"
+                placeholder="nama@email.com"
+                leftIcon={<Mail className="w-4 h-4" />}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            ) : (
+              <Input
+                label="Nomor Handphone"
+                type="tel"
+                placeholder="Contoh: 08123456789 atau +62812..."
+                helperText="Format nomor diawali dengan 08 atau +62"
+                leftIcon={<Smartphone className="w-4 h-4" />}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                autoComplete="tel"
+                required
+              />
+            )}
+
+            <div className="relative">
+              <Input
+                label="Kata Sandi"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                leftIcon={<Lock className="w-4 h-4" />}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-8 text-slate-400 hover:text-slate-600 transition-colors"
+                title={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
 
             <Button type="submit" variant="primary" className="w-full mt-2" isLoading={isLoading}>
               <LogIn className="w-4 h-4 mr-1.5" />
-              <span>Masuk ke Dashboard</span>
+              <span>
+                {loginMethod === 'email' ? 'Masuk dengan Email' : 'Masuk dengan Nomor HP'}
+              </span>
             </Button>
           </form>
 

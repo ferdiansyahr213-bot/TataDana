@@ -430,12 +430,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'check_or_login_user') {
-      const { email, password } = payload || {};
-      const cleanEmail = (email || '').trim().toLowerCase();
+      const { identifier, email, phone, password } = payload || {};
+      const rawIdentifier = (identifier || email || phone || '').trim();
+      const cleanEmail = rawIdentifier.toLowerCase();
+      const digitsOnly = rawIdentifier.replace(/\D/g, '');
       const inputPassword = (password || '').trim();
 
-      if (!cleanEmail || !inputPassword) {
-        return NextResponse.json({ ok: false, error: 'Email dan kata sandi wajib diisi' }, { status: 400 });
+      if (!rawIdentifier || !inputPassword) {
+        return NextResponse.json({ ok: false, error: 'Email / Nomor Handphone dan kata sandi wajib diisi' }, { status: 400 });
       }
 
       // ====================================================================
@@ -456,16 +458,18 @@ export async function POST(req: NextRequest) {
         'admin123',
       ].filter(Boolean) as string[];
 
-      const isAttemptingAdmin = cleanEmail === adminEmail;
+      const existingAdmin = serverStore.users.get('usr_admin_999');
+      const adminSavedPhone = existingAdmin?.phone_number || serverStore.getSetting('admin_wa_number') || process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || process.env.NEXT_PUBLIC_ADMIN_WA || '087730370324';
+      const adminPhoneDigits = adminSavedPhone.replace(/\D/g, '');
+
+      const isAttemptingAdmin = cleanEmail === adminEmail || 
+        (digitsOnly.length >= 8 && adminPhoneDigits.endsWith(digitsOnly.slice(-9)));
 
       if (isAttemptingAdmin) {
         // Cek apakah password cocok dengan salah satu password admin yang valid
         const isPasswordMatch = validAdminPasswords.includes(inputPassword);
 
         if (isPasswordMatch) {
-          const existingAdmin = serverStore.users.get('usr_admin_999');
-          const adminSavedPhone = existingAdmin?.phone_number || serverStore.getSetting('admin_wa_number') || process.env.NEXT_PUBLIC_ADMIN_WA_NUMBER || process.env.NEXT_PUBLIC_ADMIN_WA || '087730370324';
-
           const adminUser: any = existingAdmin || {
             id: 'usr_admin_999',
             full_name: 'Administrator TataDana',
@@ -577,16 +581,16 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // B. Cek Database Store / Persistent Local Database
-      const foundUser = serverStore.getUserByEmail(cleanEmail);
+      // B. Cek Database Store / Persistent Local Database (Email atau Nomor HP)
+      const foundUser = serverStore.getUserByIdentifier(rawIdentifier);
 
       if (!foundUser) {
-        return NextResponse.json({ ok: false, error: 'Email atau kata sandi salah' }, { status: 401 });
+        return NextResponse.json({ ok: false, error: 'Email / Nomor Handphone atau kata sandi salah' }, { status: 401 });
       }
 
       // Validasi kata sandi jika tersimpan
       if (foundUser.password && foundUser.password !== inputPassword) {
-        return NextResponse.json({ ok: false, error: 'Email atau kata sandi salah' }, { status: 401 });
+        return NextResponse.json({ ok: false, error: 'Email / Nomor Handphone atau kata sandi salah' }, { status: 401 });
       }
 
       // Pengecekan status saat login: jika masih pending dan bukan admin, tolak akses

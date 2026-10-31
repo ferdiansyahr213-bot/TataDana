@@ -433,16 +433,59 @@ class ServerStore {
     return undefined;
   }
 
-  // Find user by phone number
+  // Find user by phone number (with Indonesian phone prefix normalization)
   getUserByPhone(phone: string): UserProfile | undefined {
-    const cleanPhone = (phone || '').replace(/\D/g, '');
-    for (const user of this.users.values()) {
-      if (user.phone_number?.replace(/\D/g, '') === cleanPhone) return user;
+    const raw = (phone || '').trim();
+    if (!raw) return undefined;
+    const cleanDigits = raw.replace(/\D/g, '');
+    if (!cleanDigits) return undefined;
+
+    // Normalisasi variasi awalan: 08xxx <-> 628xxx
+    const variants = new Set<string>();
+    variants.add(cleanDigits);
+    if (cleanDigits.startsWith('62')) {
+      variants.add('0' + cleanDigits.slice(2));
+    } else if (cleanDigits.startsWith('0')) {
+      variants.add('62' + cleanDigits.slice(1));
     }
-    if (cleanPhone === '081234567890') {
+
+    for (const user of this.users.values()) {
+      if (!user.phone_number) continue;
+      const userDigits = user.phone_number.replace(/\D/g, '');
+      if (variants.has(userDigits)) return user;
+    }
+
+    // Admin phone aliases
+    const adminWA = this.settings.get('admin_wa_number') || this.settings.get('admin_phone_number');
+    if (adminWA && variants.has(adminWA.replace(/\D/g, ''))) {
+      return this.users.get('usr_admin_999') || Array.from(this.users.values()).find(u => u.role === 'superadmin');
+    }
+
+    if (variants.has('081234567890')) {
       return this.users.get('usr_demo_123');
     }
     return undefined;
+  }
+
+  // Find user by either email or phone number
+  getUserByIdentifier(identifier: string): UserProfile | undefined {
+    if (!identifier) return undefined;
+    const clean = identifier.trim();
+
+    // Prioritaskan email jika mengandung '@'
+    if (clean.includes('@')) {
+      return this.getUserByEmail(clean);
+    }
+
+    // Jika mengandung deretan nomor handphone, cari berdasarkan nomor telepon
+    const digitsOnly = clean.replace(/\D/g, '');
+    if (digitsOnly.length >= 8) {
+      const byPhone = this.getUserByPhone(clean);
+      if (byPhone) return byPhone;
+    }
+
+    // Fallback pencarian fleksibel
+    return this.getUserByEmail(clean) || this.getUserByPhone(clean);
   }
 
   // User Wallets
